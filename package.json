@@ -32,9 +32,9 @@
     "dev:electron": "wait-on tcp:5174 && tsc -p electron/tsconfig.json && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5174 electron .",
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
     "test:electron": "tsc -p electron/tsconfig.json && node --test dist-electron/*.test.js",
-    "test:backend": "python -m pytest backend/tests",
+    "test:backend": ".\\.venv\\Scripts\\python.exe -m pytest backend/tests",
     "typecheck": "tsc -b --pretty false",
-    "lint": "python -m ruff check backend",
+    "lint": ".\\.venv\\Scripts\\python.exe -m ruff check backend",
     "test": "npm run typecheck && npm run test:electron && npm run test:backend",
     "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "start": "electron ."
