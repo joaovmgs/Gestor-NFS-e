@@ -42,6 +42,19 @@ Baixe o instalador mais recente na página de
 - Armazenamento opcional de credenciais protegido pelo Windows.
 - Banco de dados SQLite local, sem painel administrativo ou serviço externo.
 
+## DANFSe v2.0
+
+O gerador de PDF deste projeto utiliza o layout **DANFSe v2.0** e foi
+desenvolvido com base nas especificações da
+[Nota Técnica nº 008 - Especificações Técnicas do DANFSe](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/nt-008-se-cgnfse-danfse-20260505.pdf),
+publicada pela SE/CGNFS-e.
+
+Esta implementação ainda está em processo de homologação. Podem existir
+alterações futuras na documentação oficial, diferenças pontuais de
+posicionamento, espaçamento ou preenchimento de campos e pequenos erros de
+layout. Antes de utilizar o PDF em processos fiscais ou operacionais críticos,
+valide o resultado com os XMLs e requisitos aplicáveis.
+
 ## Como funciona
 
 1. O aplicativo inicia uma API local disponível apenas em `127.0.0.1`.
