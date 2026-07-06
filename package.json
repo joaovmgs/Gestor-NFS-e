@@ -1,7 +1,7 @@
 {
   "name": "gestor-nfse-nacional",
   "productName": "Gestor NFS-e",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "author": "Gestor NFS-e contributors",
   "description": "Aplicativo para consultar e organizar documentos da NFS-e Nacional",
@@ -81,9 +81,18 @@
       {
         "from": "build-resources/weasyprint",
         "to": "weasyprint"
+      },
+      {
+        "from": "public/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "public/icon.ico",
+        "to": "icon.ico"
       }
     ],
     "win": {
+      "icon": "public/icon.ico",
       "target": [
         {
           "target": "nsis",

@@ -1,7 +1,11 @@
 # Gestor NFS-e
 
+<p align="center">
+  <img src="public/icon.png" alt="Ícone do Gestor NFS-e" width="180">
+</p>
+
 Aplicativo desktop para baixar, consultar e organizar notas fiscais de serviço
-eletrônicas do Portal Nacional da NFS-e.
+eletrônicas do Ambiente de Dados Nacional da NFS-e.
 
 [![Windows](https://img.shields.io/badge/Windows-10%20e%2011-0078D4?logo=windows)](https://github.com/joaovmgs/Gestor-NFS-e/releases/latest)
 [![CI](https://github.com/joaovmgs/Gestor-NFS-e/actions/workflows/ci.yml/badge.svg)](https://github.com/joaovmgs/Gestor-NFS-e/actions/workflows/ci.yml)
@@ -58,13 +62,13 @@ valide o resultado com os XMLs e requisitos aplicáveis.
 ## Como funciona
 
 1. O aplicativo inicia uma API local disponível apenas em `127.0.0.1`.
-2. O certificado selecionado autentica a consulta no Portal Nacional da NFS-e.
+2. O certificado selecionado autentica a consulta nos serviços nacionais da NFS-e.
 3. Os documentos são consultados por NSU e armazenados no computador.
 4. Novas consultas continuam do último NSU salvo e também verificam eventos.
 
 Ao abrir uma empresa com certificado armazenado, o aplicativo verifica
 automaticamente se existem novos documentos. Consultas adicionais entram em uma
-fila para evitar excesso de requisições ao Portal Nacional.
+fila para evitar excesso de requisições aos serviços da NFS-e.
 
 ## Dados e segurança
 
@@ -167,7 +171,7 @@ pessoal do Windows, inclusive quando a chave privada não pode ser exportada.
 ### O projeto é oficial?
 
 Não. Este é um projeto independente e não possui vínculo com a Receita Federal,
-o Serpro ou o Portal Nacional da NFS-e.
+o Serpro ou os órgãos responsáveis pela NFS-e de padrão nacional.
 
 ## Contribuição
 

@@ -31,8 +31,8 @@ contextBridge.exposeInMainWorld("nfse", {
     return () => ipcRenderer.removeListener("sync:status", listener);
   },
   listSyncLogs: (cnpj: string) => ipcRenderer.invoke("sync:logs", cnpj),
-  syncCompany: (cnpj: string, password?: string) =>
-    ipcRenderer.invoke("companies:sync", { cnpj, password }),
+  syncCompany: (cnpj: string, password?: string, notify = true) =>
+    ipcRenderer.invoke("companies:sync", { cnpj, password, notify }),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   updateSettings: (settings: AppSettings) => ipcRenderer.invoke("settings:update", settings),
   selectNotesDirectory: () => ipcRenderer.invoke("settings:select-directory"),

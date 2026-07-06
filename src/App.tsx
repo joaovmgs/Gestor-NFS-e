@@ -4,8 +4,8 @@ import {
   ChevronRight,
   Download,
   FileKey2,
-  FileText,
   FolderOpen,
+  Github,
   HardDrive,
   History,
   Plus,
@@ -13,6 +13,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  SquareArrowOutUpRight,
   X
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -26,6 +27,7 @@ import type {
 } from "./types";
 
 type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | null;
+const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
   value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
@@ -147,7 +149,7 @@ export function App() {
       await loadDocuments(next);
       const company = result.find((item) => item.cnpj === next);
       if (company?.remember_certificate || company?.certificate_source === "windows") {
-        await window.nfse.syncCompany(next).catch(() => undefined);
+        await window.nfse.syncCompany(next, undefined, false).catch(() => undefined);
       }
     }
     setLoading(false);
@@ -202,7 +204,7 @@ export function App() {
     await loadDocuments(cnpj);
     const company = companies.find((item) => item.cnpj === cnpj);
     if (company?.remember_certificate || company?.certificate_source === "windows") {
-      await window.nfse.syncCompany(cnpj).catch(() => undefined);
+      await window.nfse.syncCompany(cnpj, undefined, false).catch(() => undefined);
     }
   }
 
@@ -272,7 +274,7 @@ export function App() {
     if (!selected) return;
     setMessage("");
     try {
-      const queued = await window.nfse.syncCompany(selected.cnpj, passwordForSession);
+      const queued = await window.nfse.syncCompany(selected.cnpj, passwordForSession, true);
       setDialog(null);
       setSyncPassword("");
       setMessage(
@@ -285,7 +287,7 @@ export function App() {
     } catch (error) {
       setMessage(
         "Não foi possível concluir a sincronização agora. " +
-        "O Gestor NFS-e aguardará antes de consultar novamente quando o Portal Nacional estiver disponível."
+        "O Gestor NFS-e aguardará antes de consultar novamente quando o serviço da NFS-e estiver disponível."
       );
       await loadCompanies(selected.cnpj).catch(() => undefined);
       setSyncLogs(await window.nfse.listSyncLogs(selected.cnpj).catch(() => []));
@@ -348,8 +350,8 @@ export function App() {
       </div>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><FileText size={20} /></div>
-          <div><strong>Gestor NFS-e</strong><span>Portal Nacional</span></div>
+          <div className="brand-mark"><img src="./icon.png" alt="" /></div>
+          <div><strong>Gestor NFS-e</strong><span>Consulta e organização</span></div>
         </div>
 
         <div className="sidebar-heading">
@@ -391,7 +393,11 @@ export function App() {
         </nav>
         <div className="sidebar-footer">
           <button className="settings-button" onClick={openSettings}><Settings size={16} /> Configurações</button>
-          <div className="local-status"><ShieldCheck size={15} /> Dados somente neste computador</div>
+          <a className="repository-link" href={repositoryUrl} target="_blank" rel="noreferrer">
+            <Github size={15} />
+            <span>Repositório no GitHub</span>
+            <SquareArrowOutUpRight size={13} />
+          </a>
         </div>
       </aside>
 
@@ -456,21 +462,31 @@ export function App() {
                 </div>
               </div>
               <div className="filter-bar">
-                <div className="period-fields">
-                  <label className="date-filter">Data inicial<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-                  <label className="date-filter">Data final<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
-                  <button className="button secondary filter-button" onClick={() => loadDocuments(selected.cnpj, 1)}>Aplicar período</button>
-                  <button className="button primary filter-button" disabled={downloading} onClick={downloadDocuments}>
-                    <Download size={16} /> {downloading ? "Gerando ZIP" : "Baixar ZIP"}
-                  </button>
-                </div>
-                <div className="document-query">
+                <label className="filter-field">
+                  <span>Data inicial</span>
+                  <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                </label>
+                <label className="filter-field">
+                  <span>Data final</span>
+                  <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                </label>
+                <label className="filter-field">
+                  <span>Situação</span>
                   <select value={documentStatus} onChange={(event) => setDocumentStatus(event.target.value as typeof documentStatus)} aria-label="Filtrar por situação">
                     <option value="todas">Todas as situações</option>
                     <option value="autorizada">Autorizadas</option>
                     <option value="cancelada">Canceladas</option>
                   </select>
+                </label>
+                <label className="filter-field filter-search">
+                  <span>Buscar notas</span>
                   <div className="search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Número, prestador, tomador ou valor" /></div>
+                </label>
+                <div className="filter-actions">
+                  <button className="button secondary filter-button" onClick={() => loadDocuments(selected.cnpj, 1)}>Aplicar filtros</button>
+                  <button className="button primary filter-button" disabled={downloading} onClick={downloadDocuments}>
+                    <Download size={16} /> {downloading ? "Gerando ZIP" : "Baixar ZIP"}
+                  </button>
                 </div>
               </div>
               {(downloading || selectedExportActive || selectedExportPending > 0) && (
@@ -496,7 +512,11 @@ export function App() {
                         <td>{document.issuer_name || "-"}</td>
                         <td>{document.customer_name || "-"}</td>
                         <td className="money">{formatMoney(document.service_amount)}</td>
-                        <td><span className="status-badge">{document.status || "Autorizada"}</span></td>
+                        <td>
+                          <span className={`status-badge ${document.status?.toLocaleLowerCase("pt-BR") === "cancelada" ? "cancelled" : ""}`}>
+                            {document.status || "Autorizada"}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -593,6 +613,14 @@ export function App() {
                 <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => setSettings((current) => ({ ...current, notifications_enabled: event.target.checked }))} />
                 <span><strong>Notificações do Windows</strong><small>Avisar quando uma sincronização for concluída.</small></span>
               </label>
+              <a className="settings-repository" href={repositoryUrl} target="_blank" rel="noreferrer">
+                <Github size={20} />
+                <span>
+                  <strong>Repositório do Gestor NFS-e</strong>
+                  <small>Acesse o código-fonte, as versões e a documentação no GitHub.</small>
+                </span>
+                <SquareArrowOutUpRight size={15} />
+              </a>
             </div>
             <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button><button className="button primary">Salvar configurações</button></div>
           </form>

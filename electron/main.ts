@@ -4,11 +4,14 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   Notification,
   safeStorage,
+  shell,
   Tray
 } from "electron";
 import { ChildProcess, execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -31,6 +34,7 @@ let mainWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let isQuitting = false;
 const lastDocumentQueryByCompany = new Map<string, AppliedDownloadQuery>();
+const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -55,6 +59,7 @@ interface ExportJob {
 interface SyncRequest {
   cnpj: string;
   password?: string;
+  notify: boolean;
 }
 
 interface CompanyRecord {
@@ -79,6 +84,39 @@ async function freePort(): Promise<number> {
 
 function projectRoot(): string {
   return app.isPackaged ? process.resourcesPath : path.resolve(__dirname, "..");
+}
+
+function appIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "icon.png")
+    : path.join(projectRoot(), "public", "icon.png");
+}
+
+function appWindowIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "icon.ico")
+    : path.join(projectRoot(), "public", "icon.ico");
+}
+
+function openRepositoryInBrowser(): void {
+  const chromePaths = [
+    process.env.LOCALAPPDATA &&
+      path.join(process.env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe"),
+    process.env.PROGRAMFILES &&
+      path.join(process.env.PROGRAMFILES, "Google", "Chrome", "Application", "chrome.exe"),
+    process.env["PROGRAMFILES(X86)"] &&
+      path.join(process.env["PROGRAMFILES(X86)"], "Google", "Chrome", "Application", "chrome.exe")
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const chrome = chromePaths.find(existsSync);
+  if (chrome) {
+    spawn(chrome, [repositoryUrl], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false
+    }).unref();
+    return;
+  }
+  void shell.openExternal(repositoryUrl);
 }
 
 async function startBackend(): Promise<void> {
@@ -232,6 +270,7 @@ async function showDesktopNotification(title: string, body: string): Promise<voi
   new Notification({
     title,
     body,
+    icon: appIconPath(),
     silent: false
   }).show();
 }
@@ -282,7 +321,7 @@ async function addSyncLog(
   });
 }
 
-async function synchronizeWindowsCompany(company: CompanyRecord): Promise<void> {
+async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number> {
   if (!company.certificate_reference) {
     throw new Error("Thumbprint do certificado do Windows nao encontrado.");
   }
@@ -347,8 +386,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<void> 
     downloaded += batch.downloaded;
     if (!batch.ok) throw new Error(batch.diagnostic);
     if (!batch.continue) {
-      await showSyncNotification(company.legal_name, downloaded);
-      return;
+      return downloaded;
     }
     requestedNsu = batch.last_nsu;
     await wait(5000);
@@ -358,7 +396,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<void> 
 async function synchronizePfxCompany(
   company: CompanyRecord,
   password?: string
-): Promise<void> {
+): Promise<number | null> {
   let credential = await readCredential(company.cnpj);
   if (!credential) {
     if (!password) throw new Error("Informe a senha do certificado.");
@@ -367,7 +405,7 @@ async function synchronizePfxCompany(
       properties: ["openFile"],
       filters: [{ name: "Certificado A1", extensions: ["pfx", "p12"] }]
     });
-    if (selection.canceled || selection.filePaths.length === 0) return;
+    if (selection.canceled || selection.filePaths.length === 0) return null;
     credential = {
       password,
       pfx: await readFile(selection.filePaths[0])
@@ -383,7 +421,7 @@ async function synchronizePfxCompany(
     downloaded: number;
   }>(`/companies/${company.cnpj}/sync/pfx`, { method: "POST", body: form });
   if (!result.ok) throw new Error(result.diagnostic);
-  await showSyncNotification(company.legal_name, result.downloaded);
+  return result.downloaded;
 }
 
 async function synchronizeCompany(request: SyncRequest): Promise<void> {
@@ -392,17 +430,20 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
     const company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
 
-    if (company.certificate_source === "windows") {
-      await synchronizeWindowsCompany(company);
-    } else {
-      await synchronizePfxCompany(company, request.password);
+    const downloaded = company.certificate_source === "windows"
+      ? await synchronizeWindowsCompany(company)
+      : await synchronizePfxCompany(company, request.password);
+    if (request.notify && downloaded !== null) {
+      await showSyncNotification(company.legal_name, downloaded);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha desconhecida.";
-    await showDesktopNotification(
-      "Sincronizacao temporariamente indisponivel",
-      `${request.cnpj}: ${message}`
-    );
+    if (request.notify) {
+      await showDesktopNotification(
+        "Sincronizacao temporariamente indisponivel",
+        `${request.cnpj}: ${message}`
+      );
+    }
   }
 }
 
@@ -575,6 +616,7 @@ async function createWindow(): Promise<void> {
     minWidth: 980,
     minHeight: 640,
     backgroundColor: "#f4f6f5",
+    icon: appWindowIconPath(),
     title: "Gestor NFS-e",
     show: false,
     frame: false,
@@ -591,6 +633,12 @@ async function createWindow(): Promise<void> {
     mainWindow?.hide();
   });
   mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url === repositoryUrl) {
+      openRepositoryInBrowser();
+    }
+    return { action: "deny" };
+  });
   const developmentUrl = process.env.VITE_DEV_SERVER_URL;
   if (developmentUrl) {
     await mainWindow.loadURL(developmentUrl);
@@ -600,7 +648,11 @@ async function createWindow(): Promise<void> {
 }
 
 async function createTray(): Promise<void> {
-  const icon = await app.getFileIcon(process.execPath, { size: "small" });
+  const icon = nativeImage.createFromPath(appIconPath()).resize({
+    width: 20,
+    height: 20,
+    quality: "best"
+  });
   tray = new Tray(icon);
   tray.setToolTip("Gestor NFS-e");
   tray.setContextMenu(Menu.buildFromTemplate([

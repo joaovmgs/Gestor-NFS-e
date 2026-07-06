@@ -94,7 +94,7 @@ export interface NfseApi {
   getSyncQueueStatus(): Promise<ExportQueueStatus>;
   onSyncQueueStatus(callback: (status: ExportQueueStatus) => void): () => void;
   listSyncLogs(cnpj: string): Promise<SyncLog[]>;
-  syncCompany(cnpj: string, password?: string): Promise<SyncQueueResult>;
+  syncCompany(cnpj: string, password?: string, notify?: boolean): Promise<SyncQueueResult>;
   getSettings(): Promise<AppSettings>;
   updateSettings(settings: AppSettings): Promise<AppSettings>;
   selectNotesDirectory(): Promise<string | null>;
