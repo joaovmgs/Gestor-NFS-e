@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+*.exe binary
+*.png binary
+*.ico binary
+*.pfx binary
+*.p12 binary
+*.pdf binary
+*.xlsx binary

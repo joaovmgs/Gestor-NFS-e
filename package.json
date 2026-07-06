@@ -1,0 +1,104 @@
+{
+  "name": "gestor-nfse-nacional",
+  "productName": "Gestor NFS-e",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Gestor NFS-e contributors",
+  "description": "Aplicativo para consultar e organizar documentos da NFS-e Nacional",
+  "license": "MIT",
+  "homepage": "https://github.com/joaovmgs/Gestor-NFS-e#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/joaovmgs/Gestor-NFS-e.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joaovmgs/Gestor-NFS-e/issues"
+  },
+  "keywords": [
+    "nfse",
+    "nfse-nacional",
+    "danfse",
+    "nota-fiscal-de-servico",
+    "xml-nfse",
+    "contador"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1 --port 5174",
+    "dev:electron": "wait-on tcp:5174 && tsc -p electron/tsconfig.json && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5174 electron .",
+    "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
+    "test:electron": "tsc -p electron/tsconfig.json && node --test dist-electron/*.test.js",
+    "test:backend": "python -m pytest backend/tests",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "python -m ruff check backend",
+    "test": "npm run typecheck && npm run test:electron && npm run test:backend",
+    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.9",
+    "wait-on": "^9.0.1"
+  },
+  "build": {
+    "appId": "br.com.gestornfse.app",
+    "productName": "Gestor NFS-e",
+    "artifactName": "Gestor-NFSe-Setup-${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build-resources/backend/gestor-nfse-backend",
+        "to": "backend"
+      },
+      {
+        "from": "build-resources/windows-helper/Nfse.WindowsCertificates.exe",
+        "to": "windows-cert-helper.exe"
+      },
+      {
+        "from": "build-resources/weasyprint",
+        "to": "weasyprint"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestor NFS-e"
+    }
+  }
+}

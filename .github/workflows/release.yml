@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install PDF system dependencies
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\bash.exe -lc `
+            "pacman -S --needed --noconfirm mingw-w64-x86_64-gdk-pixbuf2 mingw-w64-x86_64-pango"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm ci
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -e "backend[dev]"
+
+      - name: Verify
+        run: |
+          npm run lint
+          npm test
+
+      - name: Set package version
+        run: npm version "${{ github.ref_name }}" --no-git-tag-version --allow-same-version
+
+      - name: Build installer
+        run: npm run dist:win
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem "release\Gestor-NFSe-Setup-*.exe" | Select-Object -First 1
+          gh release create "${{ github.ref_name }}" $installer.FullName `
+            --generate-notes `
+            --title "Gestor NFS-e ${{ github.ref_name }}"
