@@ -217,3 +217,45 @@ def test_document_search_and_status_filter_are_applied_before_pagination(tmp_pat
     assert repository.list_documents(
         "12345678000190", status="autorizada"
     )["total"] == 1
+
+
+def test_backfill_missing_note_numbers(tmp_path) -> None:
+    xml_path = tmp_path / "nota.xml"
+    xml_path.write_text(
+        """
+        <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">
+          <infNFSe><nNFSe>9876</nNFSe></infNFSe>
+        </NFSe>
+        """,
+        encoding="utf-8",
+    )
+    database = Database(tmp_path / "backfill.db")
+    database.initialize()
+    repository = Repository(database)
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa Teste",
+            "certificate_source": "pfx",
+            "remember_certificate": False,
+            "certificate_reference": None,
+            "certificate_expires_at": "2030-01-01T00:00:00Z",
+        }
+    )
+    repository.save_document(
+        {
+            "company_cnpj": "12345678000190",
+            "nsu": 1,
+            "access_key": "CHAVE-SEM-NUMERO",
+            "document_type": "NFSE",
+            "event_type": None,
+            "direction": "emitida",
+            "status": "",
+            "xml_path": str(xml_path),
+        }
+    )
+
+    database.backfill_note_numbers()
+
+    document = repository.list_documents("12345678000190")["items"][0]
+    assert document["note_number"] == "9876"

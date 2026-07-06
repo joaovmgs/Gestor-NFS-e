@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from threading import Thread
 
 from fastapi.background import BackgroundTasks
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -52,6 +53,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI):
         database.initialize()
         repository.initialize_settings(str(current_settings.default_notes_dir))
+        Thread(
+            target=database.backfill_note_numbers,
+            name="nfse-note-number-backfill",
+            daemon=True,
+        ).start()
         yield
 
     app = FastAPI(title="NFS-e Desktop API", version="0.1.0", lifespan=lifespan)

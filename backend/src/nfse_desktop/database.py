@@ -87,7 +87,6 @@ class Database:
                 connection.execute("ALTER TABLE documents ADD COLUMN event_type TEXT")
             if "note_number" not in document_columns:
                 connection.execute("ALTER TABLE documents ADD COLUMN note_number TEXT")
-                self._backfill_note_numbers(connection)
             connection.execute(
                 """
                 DELETE FROM sync_logs
@@ -104,15 +103,17 @@ class Database:
                 """
             )
 
-    @staticmethod
-    def _backfill_note_numbers(connection: sqlite3.Connection) -> None:
-        rows = connection.execute(
-            """
-            SELECT id, xml_path
-            FROM documents
-            WHERE document_type = 'NFSE' AND note_number IS NULL
-            """
-        ).fetchall()
+    def backfill_note_numbers(self, batch_size: int = 200) -> int:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, xml_path
+                FROM documents
+                WHERE document_type = 'NFSE' AND note_number IS NULL
+                """
+            ).fetchall()
+        updates: list[tuple[str, int]] = []
+        updated = 0
         for row in rows:
             try:
                 root = ET.parse(row["xml_path"]).getroot()
@@ -125,12 +126,24 @@ class Database:
                     None,
                 )
                 if number:
-                    connection.execute(
-                        "UPDATE documents SET note_number = ? WHERE id = ?",
-                        (number, row["id"]),
-                    )
+                    updates.append((number, row["id"]))
+                    if len(updates) >= batch_size:
+                        self._save_note_number_batch(updates)
+                        updated += len(updates)
+                        updates.clear()
             except (OSError, ET.ParseError):
                 continue
+        if updates:
+            self._save_note_number_batch(updates)
+            updated += len(updates)
+        return updated
+
+    def _save_note_number_batch(self, updates: list[tuple[str, int]]) -> None:
+        with self.connect() as connection:
+            connection.executemany(
+                "UPDATE documents SET note_number = ? WHERE id = ?",
+                updates,
+            )
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
