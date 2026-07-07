@@ -34,3 +34,35 @@ test("processes export jobs sequentially", async () => {
   await allFinished;
   assert.deepEqual(order, ["start:A", "end:A", "start:B", "end:B"]);
 });
+
+test("removes pending jobs by id without stopping the active job", async () => {
+  const order: string[] = [];
+  let releaseFirst: (() => void) | undefined;
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const queue = new SequentialTaskQueue<string>(
+    async (item) => {
+      order.push(`start:${item}`);
+      if (item === "A") await firstGate;
+      order.push(`end:${item}`);
+    },
+    () => undefined,
+    (item) => item
+  );
+
+  queue.enqueue("A");
+  queue.enqueue("B");
+  queue.enqueue("B");
+  queue.enqueue("C");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(queue.removePendingById("B"), 2);
+  assert.equal(queue.snapshot().activeId, "A");
+  assert.deepEqual(queue.snapshot().pendingIds, ["C"]);
+
+  releaseFirst?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(order, ["start:A", "end:A", "start:C", "end:C"]);
+});

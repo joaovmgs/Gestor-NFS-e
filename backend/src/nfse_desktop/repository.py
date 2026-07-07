@@ -105,6 +105,11 @@ class Repository:
                 (company["cnpj"],),
             )
 
+    def delete_company(self, cnpj: str) -> bool:
+        with self.database.connect() as connection:
+            cursor = connection.execute("DELETE FROM companies WHERE cnpj = ?", (cnpj,))
+        return cursor.rowcount > 0
+
     def list_documents(
         self,
         cnpj: str,

@@ -40,6 +40,7 @@ let tray: Tray | undefined;
 let isQuitting = false;
 const lastDocumentQueryByCompany = new Map<string, AppliedDownloadQuery>();
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
+const removedCompanyCnpjs = new Set<string>();
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -334,6 +335,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
   const retryDelays = [15, 30, 60, 120, 300];
 
   while (true) {
+    if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     let stdout: string;
     try {
       const result = await execFileAsync(
@@ -367,6 +369,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
     }
 
     networkAttempt = 0;
+    if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     let response: Record<string, unknown>;
     try {
       response = JSON.parse(stdout) as Record<string, unknown>;
@@ -386,6 +389,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
       body: JSON.stringify({ requested_nsu: requestedNsu, response })
     });
     downloaded += batch.downloaded;
+    if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     if (!batch.ok) throw new Error(batch.diagnostic);
     if (!batch.continue) {
       return downloaded;
@@ -428,6 +432,7 @@ async function synchronizePfxCompany(
 
 async function synchronizeCompany(request: SyncRequest): Promise<void> {
   try {
+    if (removedCompanyCnpjs.has(request.cnpj)) return;
     const companies = await api<CompanyRecord[]>("/companies");
     const company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
@@ -588,19 +593,36 @@ function registerIpc(): void {
       updateForm.set("password", input.password);
       updateForm.set("remember_certificate", "true");
       updateForm.set("credential_reference", reference);
-      return api("/companies/pfx", { method: "POST", body: updateForm });
+      const savedCompany = await api<{ cnpj: string }>("/companies/pfx", {
+        method: "POST",
+        body: updateForm
+      });
+      removedCompanyCnpjs.delete(savedCompany.cnpj);
+      return savedCompany;
     }
     await removeCredential(company.cnpj);
+    removedCompanyCnpjs.delete(company.cnpj);
     return company;
   });
   ipcMain.handle("certificates:list-windows", listWindowsCertificates);
   ipcMain.handle("companies:register-windows", (_event, certificate: WindowsCertificate) => {
     validateWindowsCertificate(certificate);
-    return api("/companies/windows", {
+    return api<{ cnpj: string }>("/companies/windows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(certificate)
+    }).then((company) => {
+      removedCompanyCnpjs.delete(company.cnpj);
+      return company;
     });
+  });
+  ipcMain.handle("companies:delete", async (_event, cnpj: string) => {
+    removedCompanyCnpjs.add(cnpj);
+    syncQueue.removePendingById(cnpj);
+    exportQueue.removePendingById(cnpj);
+    lastDocumentQueryByCompany.delete(cnpj);
+    await removeCredential(cnpj);
+    return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
   ipcMain.handle("companies:sync", (_event, input: SyncRequest) => {
     const snapshot = syncQueue.snapshot();

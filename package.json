@@ -1,7 +1,7 @@
 {
   "name": "gestor-nfse-nacional",
   "productName": "Gestor NFS-e",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "author": "Gestor NFS-e contributors",
   "description": "Aplicativo para consultar e organizar documentos da NFS-e Nacional",

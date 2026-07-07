@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("nfse", {
   listWindowsCertificates: () => ipcRenderer.invoke("certificates:list-windows"),
   registerWindowsCompany: (certificate: WindowsCertificate) =>
     ipcRenderer.invoke("companies:register-windows", certificate),
+  deleteCompany: (cnpj: string) => ipcRenderer.invoke("companies:delete", cnpj),
   listDocuments: (input: DocumentQuery) => ipcRenderer.invoke("documents:list", input),
   downloadDocuments: (input: DownloadQuery) =>
     ipcRenderer.invoke(

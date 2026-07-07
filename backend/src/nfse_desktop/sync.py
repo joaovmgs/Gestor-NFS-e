@@ -47,6 +47,12 @@ class SyncService:
                 ) as client:
                     transient_attempt = 0
                     while True:
+                        if not self.repository.get_company(cnpj):
+                            return {
+                                "ok": True,
+                                "diagnostic": "Empresa removida durante a sincronizacao.",
+                                "downloaded": downloaded,
+                            }
                         try:
                             result = client.fetch_by_nsu(current_nsu, lote=True)
                         except TooManyRequestsError:
@@ -91,6 +97,12 @@ class SyncService:
                             return {"ok": False, "diagnostic": diagnostic, "downloaded": downloaded}
 
                         for document in result.documentos:
+                            if not self.repository.get_company(cnpj):
+                                return {
+                                    "ok": True,
+                                    "diagnostic": "Empresa removida durante a sincronizacao.",
+                                    "downloaded": downloaded,
+                                }
                             self._save_document(cnpj, document)
                             downloaded += 1
 

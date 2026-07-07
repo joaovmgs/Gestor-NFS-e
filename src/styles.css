@@ -57,6 +57,8 @@ button { cursor: pointer; }
 .button.primary { background: #176b52; color: #fff; }
 .button.primary:hover { background: #125c45; }
 .button.secondary { border-color: #ced6d2; background: #fff; color: #34433e; }
+.button.danger { border-color: #c84d3a; background: #b83f2e; color: #fff; }
+.button.danger:hover { background: #9f3426; }
 .button.sync { margin-left: auto; background: #18211e; color: #fff; min-height: 34px; }
 .notice { margin: 18px 30px 0; display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-left: 3px solid #b6503c; background: #fff2ef; color: #7f3123; font-size: 13px; }
 .notice button { border: 0; background: transparent; color: inherit; }
@@ -141,6 +143,9 @@ td.money { font-weight: 700; text-align: right; }
 .check-row strong { font-size: 12px; }
 .check-row small { margin-top: 5px; color: #697671; font-size: 11px; line-height: 1.4; }
 .inline-info { margin-top: 10px; padding: 10px; border-left: 3px solid #d19b25; background: #fff8e7; color: #705516; font-size: 11px; line-height: 1.5; }
+.danger-box { display: grid; gap: 9px; padding: 12px; border-left: 3px solid #b83f2e; background: #fff0ed; color: #733025; font-size: 12px; line-height: 1.5; }
+.danger-box strong { font-size: 13px; }
+.danger-box span { display: block; }
 .dialog-actions { justify-content: flex-end; margin-top: 22px; }
 .method-options { display: grid; gap: 9px; }
 .method-options > button { width: 100%; min-height: 72px; display: grid; grid-template-columns: 42px 1fr 18px; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #d6ddda; background: #fff; color: #293731; border-radius: 6px; text-align: left; }

@@ -24,6 +24,18 @@ export class SequentialTaskQueue<T> {
     return position;
   }
 
+  removePendingById(id: string): number {
+    const initialLength = this.items.length;
+    for (let index = this.items.length - 1; index >= 0; index -= 1) {
+      if (this.identify(this.items[index]) === id) {
+        this.items.splice(index, 1);
+      }
+    }
+    const removed = initialLength - this.items.length;
+    if (removed > 0) this.emit();
+    return removed;
+  }
+
   snapshot(): QueueSnapshot {
     return {
       processing: this.processing,

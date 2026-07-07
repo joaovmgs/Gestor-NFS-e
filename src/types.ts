@@ -73,6 +73,7 @@ export interface NfseApi {
   registerPfxCompany(input: { password: string; remember: boolean }): Promise<Company | null>;
   listWindowsCertificates(): Promise<WindowsCertificate[]>;
   registerWindowsCompany(certificate: WindowsCertificate): Promise<Company>;
+  deleteCompany(cnpj: string): Promise<{ removed: boolean }>;
   listDocuments(input: {
     cnpj: string;
     startDate?: string;

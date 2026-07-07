@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   SquareArrowOutUpRight,
+  Trash2,
   X
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -26,7 +27,7 @@ import type {
   WindowsCertificate
 } from "./types";
 
-type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | null;
+type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "delete-company" | null;
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
@@ -295,6 +296,32 @@ export function App() {
     }
   }
 
+  async function deleteSelectedCompany() {
+    if (!selected) return;
+    const removedCnpj = selected.cnpj;
+    setMessage("");
+    try {
+      await window.nfse.deleteCompany(removedCnpj);
+      setDialog(null);
+      setDocuments([]);
+      setDocumentTotal(0);
+      setPage(1);
+      setPages(1);
+      setSyncLogs([]);
+      setShowSyncLogs(false);
+      const remaining = companies.filter((company) => company.cnpj !== removedCnpj);
+      setCompanies(remaining);
+      const next = remaining[0]?.cnpj || "";
+      setSelectedCnpj(next);
+      if (next) {
+        await loadDocuments(next, 1);
+      }
+      setMessage("Empresa removida do Gestor NFS-e.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível remover a empresa.");
+    }
+  }
+
   async function changeDirection(nextDirection: "emitida" | "recebida") {
     if (!selected || nextDirection === direction) return;
     setDirection(nextDirection);
@@ -407,6 +434,11 @@ export function App() {
             <h1>{selected?.legal_name ?? "Empresas"}</h1>
             <p>{selected ? formatCnpj(selected.cnpj) : "Cadastre uma empresa para iniciar"}</p>
           </div>
+          {selected && (
+            <button className="button danger" onClick={() => setDialog("delete-company")}>
+              <Trash2 size={16} /> Remover empresa
+            </button>
+          )}
         </header>
 
         {message && <div className="notice">{message}<button onClick={() => setMessage("")}><X size={15} /></button></div>}
@@ -624,6 +656,43 @@ export function App() {
             </div>
             <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button><button className="button primary">Salvar configurações</button></div>
           </form>
+        </div>
+      )}
+
+      {dialog === "delete-company" && selected && (
+        <div className="dialog-backdrop">
+          <div className="dialog">
+            <div className="dialog-header">
+              <div>
+                <h2>Remover empresa</h2>
+                <p>{selected.legal_name}</p>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="danger-box">
+              <strong>Esta ação remove a empresa deste computador.</strong>
+              <span>
+                O cadastro, o histórico no banco local e a credencial salva serão removidos.
+                Exportações e arquivos já salvos na pasta das notas não serão apagados.
+              </span>
+              {(selectedSyncActive || selectedSyncPending > 0) && (
+                <span>
+                  A empresa está sincronizando ou na fila. A fila será limpa e a sincronização
+                  ativa será interrompida no próximo retorno seguro.
+                </span>
+              )}
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="button secondary" onClick={() => setDialog(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="button danger" onClick={deleteSelectedCompany}>
+                <Trash2 size={17} /> Remover empresa
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

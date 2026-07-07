@@ -130,6 +130,47 @@ def test_cancellation_event_updates_nfse_status(tmp_path) -> None:
     assert all(document["status"] == "Cancelada" for document in reverse_result["items"])
 
 
+def test_delete_company_removes_database_history(tmp_path) -> None:
+    database = Database(tmp_path / "delete-company.db")
+    database.initialize()
+    repository = Repository(database)
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa Teste",
+            "certificate_source": "pfx",
+            "remember_certificate": True,
+            "certificate_reference": "credential.bin",
+            "certificate_expires_at": "2030-01-01T00:00:00Z",
+        }
+    )
+    repository.save_document(
+        {
+            "company_cnpj": "12345678000190",
+            "nsu": 1,
+            "access_key": "CHAVE-TESTE",
+            "note_number": "100",
+            "document_type": "NFSE",
+            "event_type": None,
+            "direction": "emitida",
+            "issued_at": "2026-07-03T10:00:00",
+            "issuer_name": "Prestador",
+            "customer_name": "Tomador",
+            "service_amount": 150.75,
+            "net_amount": 140.0,
+            "status": "",
+            "xml_path": "nota.xml",
+        }
+    )
+    repository.add_sync_log("12345678000190", "info", "Consulta iniciada")
+
+    assert repository.delete_company("12345678000190") is True
+    assert repository.get_company("12345678000190") is None
+    assert repository.list_documents("12345678000190")["total"] == 0
+    assert repository.list_sync_logs("12345678000190") == []
+    assert repository.delete_company("12345678000190") is False
+
+
 def test_e2220_finishes_sync_without_error(tmp_path) -> None:
     database = Database(tmp_path / "sync.db")
     database.initialize()

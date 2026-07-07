@@ -137,6 +137,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return repository.get_company(cnpj)
 
+    @app.delete("/companies/{cnpj}", dependencies=[Depends(authorize)])
+    def delete_company(cnpj: str):
+        normalized_cnpj = "".join(character for character in cnpj if character.isdigit())
+        if len(normalized_cnpj) != 14:
+            raise HTTPException(status_code=422, detail="CNPJ invalido.")
+        removed = repository.delete_company(normalized_cnpj)
+        if not removed:
+            raise HTTPException(status_code=404, detail="Empresa nao encontrada.")
+        return {"removed": True}
+
     @app.get("/companies/{cnpj}/documents", dependencies=[Depends(authorize)])
     def list_documents(
         cnpj: str,
