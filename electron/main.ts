@@ -24,6 +24,11 @@ import {
   NoteDirection,
   resolveDownloadQuery
 } from "./download-query.js";
+import {
+  validateWindowsCertificate,
+  WindowsCertificate
+} from "./certificate-validation.js";
+import { downloadFile } from "./http-download.js";
 import { QueueSnapshot, SequentialTaskQueue } from "./task-queue.js";
 
 const execFileAsync = promisify(execFile);
@@ -38,14 +43,6 @@ const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
-
-interface WindowsCertificate {
-  thumbprint: string;
-  cnpj: string;
-  legalName: string;
-  expiresAt: string;
-  issuer: string;
-}
 
 interface ExportJob {
   cnpj: string;
@@ -198,7 +195,17 @@ async function startBackend(): Promise<void> {
 async function api<T>(route: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("X-Nfse-Token", apiToken);
-  const response = await fetch(`${backendUrl}${route}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}${route}`, { ...init, headers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      message.toLowerCase().includes("fetch failed")
+        ? "O serviço local do Gestor NFS-e não respondeu. Feche o aplicativo, abra novamente e tente de novo."
+        : `Falha ao comunicar com o serviço local: ${message}`
+    );
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     const detail = body.detail;
@@ -206,7 +213,7 @@ async function api<T>(route: string, init?: RequestInit): Promise<T> {
       ? detail.map((item) => item.msg ?? JSON.stringify(item)).join("; ")
       : typeof detail === "string"
         ? detail
-        : "Falha no servico local.";
+        : "Falha no serviço local.";
     throw new Error(message);
   }
   return response.json() as Promise<T>;
@@ -288,22 +295,17 @@ async function processExportJob(job: ExportJob): Promise<void> {
     tipo: job.direction
   });
   try {
-    const response = await fetch(
+    await downloadFile(
       `${backendUrl}/companies/${job.cnpj}/documents.zip?${query.toString()}`,
-      { headers: { "X-Nfse-Token": apiToken } }
+      job.destination,
+      { "X-Nfse-Token": apiToken }
     );
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(
-        typeof body.detail === "string" ? body.detail : "Não foi possível gerar o ZIP."
-      );
-    }
-    await writeFile(job.destination, Buffer.from(await response.arrayBuffer()));
     await showDesktopNotification(
       "ZIP de notas concluído",
       `${job.companyName}: arquivo salvo em ${job.destination}`
     );
   } catch (error) {
+    await rm(job.destination, { force: true }).catch(() => undefined);
     const message = error instanceof Error ? error.message : "Falha desconhecida.";
     await showDesktopNotification("Falha ao gerar ZIP", `${job.companyName}: ${message}`);
   }
@@ -592,13 +594,14 @@ function registerIpc(): void {
     return company;
   });
   ipcMain.handle("certificates:list-windows", listWindowsCertificates);
-  ipcMain.handle("companies:register-windows", (_event, certificate: WindowsCertificate) =>
-    api("/companies/windows", {
+  ipcMain.handle("companies:register-windows", (_event, certificate: WindowsCertificate) => {
+    validateWindowsCertificate(certificate);
+    return api("/companies/windows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(certificate)
-    })
-  );
+    });
+  });
   ipcMain.handle("companies:sync", (_event, input: SyncRequest) => {
     const snapshot = syncQueue.snapshot();
     if (snapshot.activeId === input.cnpj || snapshot.pendingIds.includes(input.cnpj)) {

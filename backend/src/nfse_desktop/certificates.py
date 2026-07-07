@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import datetime, timezone
 import re
 
 from cryptography import x509
@@ -19,6 +19,24 @@ class CertificateInfo:
     issuer: str
 
 
+def validate_certificate_period(not_before: datetime, not_after: datetime) -> None:
+    now = datetime.now(timezone.utc)
+    start = _as_utc(not_before)
+    end = _as_utc(not_after)
+    if start > now:
+        raise ValueError("O certificado ainda nao esta valido.")
+    if end < now:
+        raise ValueError("O certificado digital esta vencido.")
+
+
+def validate_certificate_expiration(expires_at: str) -> None:
+    try:
+        expiration = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("Data de validade do certificado invalida.") from exc
+    validate_certificate_period(datetime.min.replace(tzinfo=timezone.utc), expiration)
+
+
 def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
     try:
         private_key, certificate, _chain = pkcs12.load_key_and_certificates(
@@ -30,6 +48,11 @@ def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
 
     if private_key is None or certificate is None:
         raise ValueError("O arquivo precisa conter certificado e chave privada.")
+
+    validate_certificate_period(
+        certificate.not_valid_before_utc,
+        certificate.not_valid_after_utc,
+    )
 
     cnpj = _cnpj_from_certificate(certificate)
     if not cnpj:
@@ -44,6 +67,12 @@ def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
         expires_at=expires_at,
         issuer=certificate.issuer.rfc4514_string(),
     )
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _cnpj_from_certificate(certificate: x509.Certificate) -> str:
@@ -71,4 +100,3 @@ def _decode_der_string(value: bytes) -> str:
         length = int.from_bytes(value[offset : offset + length_size], "big")
         offset += length_size
     return value[offset : offset + length].decode("latin-1", errors="ignore")
-

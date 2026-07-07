@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from .certificates import inspect_pfx
+from .certificates import inspect_pfx, validate_certificate_expiration
 from .config import Settings
 from .database import Database
 from .exporter import DocumentExporter
@@ -118,13 +118,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         cnpj = "".join(character for character in payload.cnpj if character.isdigit())
         if len(cnpj) != 14:
             raise HTTPException(status_code=422, detail="CNPJ do certificado invalido.")
+        thumbprint = "".join(character for character in payload.thumbprint if character.isalnum())
+        if not thumbprint:
+            raise HTTPException(status_code=422, detail="Certificado do Windows invalido.")
+        try:
+            validate_certificate_expiration(payload.expires_at)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         repository.save_company(
             {
                 "cnpj": cnpj,
                 "legal_name": payload.legal_name,
                 "certificate_source": "windows",
                 "remember_certificate": True,
-                "certificate_reference": payload.thumbprint,
+                "certificate_reference": thumbprint.upper(),
                 "certificate_expires_at": payload.expires_at,
             }
         )

@@ -4,8 +4,9 @@
   <img src="public/icon.png" alt="Ícone do Gestor NFS-e" width="180">
 </p>
 
-Aplicativo desktop para baixar, consultar e organizar notas fiscais de serviço
-eletrônicas do Ambiente de Dados Nacional da NFS-e.
+Aplicativo desktop para baixar, consultar e organizar nota fiscal de serviço
+eletrônica e notas fiscais de serviço eletrônicas do Ambiente de Dados Nacional
+da NFS-e.
 
 [![Windows](https://img.shields.io/badge/Windows-10%20e%2011-0078D4?logo=windows)](https://github.com/joaovmgs/Gestor-NFS-e/releases/latest)
 [![CI](https://github.com/joaovmgs/Gestor-NFS-e/actions/workflows/ci.yml/badge.svg)](https://github.com/joaovmgs/Gestor-NFS-e/actions/workflows/ci.yml)

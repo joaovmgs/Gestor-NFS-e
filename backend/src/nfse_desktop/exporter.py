@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from danfse_nt008 import parse_danfse, render_danfse_pdf
 
@@ -49,10 +49,17 @@ class DocumentExporter:
                         archive.write(xml_path, arcname=f"{xml_folder}/{base_name}.xml")
 
                         pdf_path = pdf_root / f"{base_name}.pdf"
-                        data = parse_danfse(xml_path)
-                        render_danfse_pdf(data, pdf_path)
-                        archive.write(pdf_path, arcname=f"{pdf_folder}/{base_name}.pdf")
-                        exported_count += 1
+                        try:
+                            _render_pdf(xml_path, pdf_path)
+                            archive.write(
+                                pdf_path,
+                                arcname=f"{pdf_folder}/{base_name}.pdf",
+                                compress_type=ZIP_STORED,
+                            )
+                            exported_count += 1
+                        finally:
+                            pdf_path.unlink(missing_ok=True)
+
                     company = self.repository.get_company(cnpj)
                     if company is None:
                         raise ValueError("Empresa não encontrada.")
@@ -69,6 +76,7 @@ class DocumentExporter:
                         archive.write(
                             report_path,
                             arcname="relatorio-retencoes-nfse.xlsx",
+                            compress_type=ZIP_STORED,
                         )
                     finally:
                         report_path.unlink(missing_ok=True)
@@ -76,6 +84,11 @@ class DocumentExporter:
         except Exception:
             zip_path.unlink(missing_ok=True)
             raise
+
+
+def _render_pdf(xml_path: Path, pdf_path: Path) -> Path:
+    data = parse_danfse(xml_path)
+    return render_danfse_pdf(data, pdf_path)
 
 
 def _document_name(document: dict[str, object], xml_path: Path) -> str:
