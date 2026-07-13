@@ -133,6 +133,83 @@ def test_cancellation_event_updates_nfse_status(tmp_path) -> None:
     assert all(document["status"] == "Cancelada" for document in reverse_result["items"])
 
 
+def test_latest_event_defines_nfse_status(tmp_path) -> None:
+    database = Database(tmp_path / "latest-event.db")
+    database.initialize()
+    repository = Repository(database)
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa Teste",
+            "certificate_source": "pfx",
+            "remember_certificate": False,
+            "certificate_reference": None,
+            "certificate_expires_at": "2030-01-01T00:00:00Z",
+        }
+    )
+    base_document = {
+        "company_cnpj": "12345678000190",
+        "access_key": "CHAVE-EVENTO-MAIS-RECENTE",
+        "issued_at": "2026-07-02T10:00:00",
+        "issuer_name": "Prestador",
+        "customer_name": "Tomador",
+        "service_amount": 100.0,
+        "net_amount": 90.0,
+        "xml_path": "nota.xml",
+        "status": "",
+    }
+    repository.save_document(
+        {
+            **base_document,
+            "nsu": 10,
+            "document_type": "NFSE",
+            "event_type": None,
+            "direction": "emitida",
+        }
+    )
+    repository.save_document(
+        {
+            **base_document,
+            "nsu": 11,
+            "document_type": "EVENTO",
+            "event_type": "CANCELAMENTO",
+            "direction": "event",
+            "xml_path": "cancelamento.xml",
+        }
+    )
+    assert (
+        repository.list_documents("12345678000190", direction="emitida")["items"][0]["status"]
+        == "Cancelada"
+    )
+
+    repository.save_document(
+        {
+            **base_document,
+            "nsu": 12,
+            "document_type": "EVENTO",
+            "event_type": "SUBSTITUICAO",
+            "direction": "event",
+            "xml_path": "substituicao.xml",
+        }
+    )
+    assert repository.list_documents("12345678000190", direction="emitida")["items"][0]["status"] == ""
+
+    repository.save_document(
+        {
+            **base_document,
+            "nsu": 13,
+            "document_type": "EVENTO",
+            "event_type": "CANCELAMENTO",
+            "direction": "event",
+            "xml_path": "cancelamento-mais-recente.xml",
+        }
+    )
+    assert (
+        repository.list_documents("12345678000190", direction="emitida")["items"][0]["status"]
+        == "Cancelada"
+    )
+
+
 def test_delete_company_removes_database_history(tmp_path) -> None:
     database = Database(tmp_path / "delete-company.db")
     database.initialize()

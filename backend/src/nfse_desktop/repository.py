@@ -313,38 +313,43 @@ class Repository:
                     document["xml_path"],
                 ),
             )
-            event_type = str(document.get("event_type") or "").upper()
-            if "CANCELAMENTO" in event_type:
-                connection.execute(
-                    """
-                    UPDATE documents
-                    SET status = 'Cancelada'
-                    WHERE company_cnpj = ?
-                      AND access_key = ?
-                      AND document_type = 'NFSE'
-                    """,
-                    (document["company_cnpj"], document["access_key"]),
-                )
-            elif document["document_type"] == "NFSE":
-                cancellation = connection.execute(
-                    """
-                    SELECT 1
-                    FROM documents
-                    WHERE company_cnpj = ?
-                      AND access_key = ?
-                      AND upper(COALESCE(event_type, '')) LIKE '%CANCELAMENTO%'
-                    LIMIT 1
-                    """,
-                    (document["company_cnpj"], document["access_key"]),
-                ).fetchone()
-                if cancellation:
-                    connection.execute(
-                        """
-                        UPDATE documents
-                        SET status = 'Cancelada'
-                        WHERE company_cnpj = ?
-                          AND access_key = ?
-                          AND document_type = 'NFSE'
-                        """,
-                        (document["company_cnpj"], document["access_key"]),
-                    )
+            self._refresh_nfse_status_from_latest_event(
+                connection,
+                document["company_cnpj"],
+                document["access_key"],
+            )
+
+    @staticmethod
+    def _refresh_nfse_status_from_latest_event(
+        connection: Any,
+        company_cnpj: str,
+        access_key: str,
+    ) -> None:
+        latest_event = connection.execute(
+            """
+            SELECT event_type
+            FROM documents
+            WHERE company_cnpj = ?
+              AND access_key = ?
+              AND document_type != 'NFSE'
+              AND COALESCE(event_type, '') != ''
+            ORDER BY nsu DESC, COALESCE(issued_at, created_at) DESC, id DESC
+            LIMIT 1
+            """,
+            (company_cnpj, access_key),
+        ).fetchone()
+        if not latest_event:
+            return
+
+        event_type = str(latest_event["event_type"] or "").upper()
+        status = "Cancelada" if "CANCELAMENTO" in event_type else ""
+        connection.execute(
+            """
+            UPDATE documents
+            SET status = ?
+            WHERE company_cnpj = ?
+              AND access_key = ?
+              AND document_type = 'NFSE'
+            """,
+            (status, company_cnpj, access_key),
+        )
