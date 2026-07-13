@@ -10,7 +10,12 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from .certificates import inspect_pfx, validate_certificate_expiration
+from .certificates import (
+    inspect_pfx,
+    normalize_cnpj,
+    resolve_consulted_cnpj,
+    validate_certificate_expiration,
+)
 from .config import Settings
 from .database import Database
 from .exporter import DocumentExporter
@@ -22,6 +27,8 @@ class WindowsCompanyPayload(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     cnpj: str
+    query_cnpj: str | None = Field(default=None, alias="queryCnpj")
+    allow_partial: bool = Field(default=False, alias="allowPartial")
     legal_name: str = Field(alias="legalName")
     thumbprint: str
     expires_at: str = Field(alias="expiresAt")
@@ -40,6 +47,74 @@ class SyncLogPayload(BaseModel):
 class SettingsPayload(BaseModel):
     notes_directory: str
     notifications_enabled: bool
+
+
+def _requested_cnpjs(primary: str | None, batch: str | None) -> list[str | None]:
+    values = [item.strip() for item in (batch or "").replace(";", "\n").splitlines()]
+    values = [value for value in values if value]
+    if values:
+        return values
+    return [primary]
+
+
+def _save_company_variants(
+    repository: Repository,
+    *,
+    certificate_cnpj: str,
+    legal_name: str,
+    certificate_source: str,
+    remember_certificate: bool,
+    certificate_reference: str | None,
+    certificate_expires_at: str,
+    requested_cnpjs: list[str | None],
+    allow_partial: bool = False,
+) -> dict[str, object]:
+    created: list[dict[str, object]] = []
+    invalid: list[dict[str, str]] = []
+    valid_cnpjs: list[str] = []
+    seen: set[str] = set()
+
+    for requested in requested_cnpjs:
+        try:
+            consulted_cnpj = resolve_consulted_cnpj(certificate_cnpj, requested)
+        except ValueError as exc:
+            invalid.append({"cnpj": requested or "", "message": str(exc)})
+            continue
+        if consulted_cnpj in seen:
+            continue
+        seen.add(consulted_cnpj)
+        valid_cnpjs.append(consulted_cnpj)
+
+    if invalid and not allow_partial:
+        return {
+            "companies": [],
+            "valid_cnpjs": valid_cnpjs,
+            "invalid": invalid,
+            "has_invalid": True,
+        }
+
+    for consulted_cnpj in valid_cnpjs:
+        repository.save_company(
+            {
+                "cnpj": consulted_cnpj,
+                "legal_name": legal_name,
+                "certificate_source": certificate_source,
+                "certificate_cnpj": certificate_cnpj,
+                "remember_certificate": remember_certificate,
+                "certificate_reference": certificate_reference if remember_certificate else None,
+                "certificate_expires_at": certificate_expires_at,
+            }
+        )
+        company = repository.get_company(consulted_cnpj)
+        if company:
+            created.append(company)
+
+    return {
+        "companies": created,
+        "valid_cnpjs": valid_cnpjs,
+        "invalid": invalid,
+        "has_invalid": bool(invalid),
+    }
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -98,25 +173,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         password: str = Form(...),
         remember_certificate: bool = Form(False),
         credential_reference: str | None = Form(None),
+        query_cnpj: str | None = Form(None),
+        query_cnpjs: str | None = Form(None),
+        allow_partial: bool = Form(False),
     ):
         content = await certificate.read()
-        info = inspect_pfx(content, password)
-        repository.save_company(
-            {
-                "cnpj": info.cnpj,
-                "legal_name": info.legal_name,
-                "certificate_source": "pfx",
-                "remember_certificate": remember_certificate,
-                "certificate_reference": credential_reference if remember_certificate else None,
-                "certificate_expires_at": info.expires_at,
-            }
+        try:
+            info = inspect_pfx(content, password)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _save_company_variants(
+            repository,
+            certificate_cnpj=info.cnpj,
+            legal_name=info.legal_name,
+            certificate_source="pfx",
+            remember_certificate=remember_certificate,
+            certificate_reference=credential_reference,
+            certificate_expires_at=info.expires_at,
+            requested_cnpjs=_requested_cnpjs(query_cnpj, query_cnpjs),
+            allow_partial=allow_partial,
         )
-        return repository.get_company(info.cnpj)
 
     @app.post("/companies/windows", dependencies=[Depends(authorize)])
     def create_windows_company(payload: WindowsCompanyPayload):
-        cnpj = "".join(character for character in payload.cnpj if character.isdigit())
-        if len(cnpj) != 14:
+        certificate_cnpj = normalize_cnpj(payload.cnpj)
+        if len(certificate_cnpj) != 14:
             raise HTTPException(status_code=422, detail="CNPJ do certificado invalido.")
         thumbprint = "".join(character for character in payload.thumbprint if character.isalnum())
         if not thumbprint:
@@ -125,17 +206,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             validate_certificate_expiration(payload.expires_at)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        repository.save_company(
-            {
-                "cnpj": cnpj,
-                "legal_name": payload.legal_name,
-                "certificate_source": "windows",
-                "remember_certificate": True,
-                "certificate_reference": thumbprint.upper(),
-                "certificate_expires_at": payload.expires_at,
-            }
+        return _save_company_variants(
+            repository,
+            certificate_cnpj=certificate_cnpj,
+            legal_name=payload.legal_name,
+            certificate_source="windows",
+            remember_certificate=True,
+            certificate_reference=thumbprint.upper(),
+            certificate_expires_at=payload.expires_at,
+            requested_cnpjs=_requested_cnpjs(None, payload.query_cnpj),
+            allow_partial=payload.allow_partial,
         )
-        return repository.get_company(cnpj)
 
     @app.delete("/companies/{cnpj}", dependencies=[Depends(authorize)])
     def delete_company(cnpj: str):

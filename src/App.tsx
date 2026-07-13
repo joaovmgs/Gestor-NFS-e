@@ -21,6 +21,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
   AppSettings,
   Company,
+  CompanyRegistrationResult,
   Document,
   ExportQueueStatus,
   SyncLog,
@@ -32,6 +33,8 @@ const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
   value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+const onlyDigits = (value: string) => value.replace(/\D/g, "");
 
 const formatMoney = (value?: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value ?? 0);
@@ -80,6 +83,11 @@ export function App() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [password, setPassword] = useState("");
   const [syncPassword, setSyncPassword] = useState("");
+  const [queryCnpjs, setQueryCnpjs] = useState([""]);
+  const [pendingWindowsCertificate, setPendingWindowsCertificate] =
+    useState<WindowsCertificate | null>(null);
+  const [registrationResult, setRegistrationResult] =
+    useState<CompanyRegistrationResult | null>(null);
   const [remember, setRemember] = useState(true);
   const [windowsCertificates, setWindowsCertificates] = useState<WindowsCertificate[]>([]);
   const [search, setSearch] = useState("");
@@ -105,8 +113,57 @@ export function App() {
     notifications_enabled: true
   });
   const [message, setMessage] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
 
   const selected = companies.find((company) => company.cnpj === selectedCnpj);
+  const normalizedQueryCnpjs = () =>
+    queryCnpjs.map((cnpj) => onlyDigits(cnpj)).filter(Boolean);
+
+  function resetRegistrationState() {
+    setPassword("");
+    setQueryCnpjs([""]);
+    setPendingWindowsCertificate(null);
+    setRegistrationResult(null);
+    setDialogMessage("");
+  }
+
+  function updateQueryCnpj(index: number, value: string) {
+    setQueryCnpjs((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? value : item))
+    );
+    setDialogMessage("");
+    setRegistrationResult(null);
+  }
+
+  function addQueryCnpjField() {
+    setQueryCnpjs((current) => [...current, ""]);
+    setDialogMessage("");
+    setRegistrationResult(null);
+  }
+
+  function removeQueryCnpjField(index: number) {
+    setQueryCnpjs((current) => current.filter((_item, itemIndex) => itemIndex !== index));
+    setDialogMessage("");
+    setRegistrationResult(null);
+  }
+
+  async function finishRegistration(result: CompanyRegistrationResult, allowPartial = false) {
+    if (result.has_invalid && !allowPartial) {
+      setRegistrationResult(result);
+      const validCount = result.valid_cnpjs.length;
+      setDialogMessage(
+        validCount > 0
+          ? `${result.invalid.length} CNPJ(s) não são válidos para este certificado. Você pode corrigir ou continuar apenas com ${validCount} válido(s).`
+          : "Nenhum CNPJ informado é válido para este certificado."
+      );
+      return;
+    }
+    const firstCompany = result.companies[0];
+    if (!firstCompany) return;
+    setDialog(null);
+    resetRegistrationState();
+    await loadCompanies(firstCompany.cnpj);
+  }
   const visibleCompanies = useMemo(() => {
     const query = companySearch.trim().toLocaleLowerCase("pt-BR");
     return [...companies]
@@ -209,23 +266,33 @@ export function App() {
     }
   }
 
-  async function registerPfx(event: FormEvent) {
+  async function registerPfx(event: FormEvent, allowPartial = false) {
     event.preventDefault();
+    await submitPfxRegistration(allowPartial);
+  }
+
+  async function submitPfxRegistration(allowPartial = false) {
     setMessage("");
+    setDialogMessage("");
     try {
-      const company = await window.nfse.registerPfxCompany({ password, remember });
-      if (!company) return;
-      setDialog(null);
-      setPassword("");
-      await loadCompanies(company.cnpj);
+      const result = await window.nfse.registerPfxCompany({
+        password,
+        remember,
+        queryCnpjs: normalizedQueryCnpjs(),
+        allowPartial
+      });
+      if (!result) return;
+      await finishRegistration(result, allowPartial);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel cadastrar.");
+      setDialogMessage(error instanceof Error ? error.message : "Nao foi possivel cadastrar.");
     }
   }
 
   async function openWindowsCertificates() {
     setDialog("windows");
     setMessage("");
+    setDialogMessage("");
+    setRegistrationResult(null);
     try {
       setWindowsCertificates(await window.nfse.listWindowsCertificates());
     } catch (error) {
@@ -260,14 +327,19 @@ export function App() {
     }
   }
 
-  async function registerWindows(certificate: WindowsCertificate) {
+  async function registerWindows(certificate: WindowsCertificate, allowPartial = false) {
     setMessage("");
+    setDialogMessage("");
+    setPendingWindowsCertificate(certificate);
     try {
-      const company = await window.nfse.registerWindowsCompany(certificate);
-      setDialog(null);
-      await loadCompanies(company.cnpj);
+      const result = await window.nfse.registerWindowsCompany(
+        certificate,
+        normalizedQueryCnpjs().join("\n") || undefined,
+        allowPartial
+      );
+      await finishRegistration(result, allowPartial);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Falha ao cadastrar certificado.");
+      setDialogMessage(error instanceof Error ? error.message : "Falha ao cadastrar certificado.");
     }
   }
 
@@ -383,7 +455,7 @@ export function App() {
 
         <div className="sidebar-heading">
           <span>Empresas</span>
-          <button className="icon-button" title="Cadastrar empresa" onClick={() => setDialog("method")}>
+          <button className="icon-button" title="Cadastrar empresa" onClick={() => { resetRegistrationState(); setDialog("method"); }}>
             <Plus size={17} />
           </button>
         </div>
@@ -454,7 +526,15 @@ export function App() {
             <section className="summary-band">
               <div><span>Último NSU</span><strong>{selected.last_nsu}</strong></div>
               <div><span>Documentos no período</span><strong>{documentTotal}</strong></div>
-              <div><span>Certificado válido até</span><strong>{formatDate(selected.certificate_expires_at)}</strong></div>
+              <div>
+                <span>Certificado válido até</span>
+                <strong>{formatDate(selected.certificate_expires_at)}</strong>
+                {selected.certificate_cnpj && selected.certificate_cnpj !== selected.cnpj && (
+                  <small className="summary-note">
+                    Certificado {formatCnpj(selected.certificate_cnpj)}
+                  </small>
+                )}
+              </div>
               <div className="sync-box">
                 <span className={`status-dot ${selected.sync_status}`} />
                 <span>{syncStatusLabel(selected.sync_status)}</span>
@@ -570,9 +650,9 @@ export function App() {
       {dialog === "method" && (
         <div className="dialog-backdrop">
           <div className="dialog">
-            <div className="dialog-header"><div><h2>Cadastrar empresa</h2><p>Escolha onde está o certificado digital.</p></div><button className="icon-button" onClick={() => setDialog(null)}><X size={18} /></button></div>
+            <div className="dialog-header"><div><h2>Cadastrar empresa</h2><p>Escolha onde está o certificado digital.</p></div><button className="icon-button" onClick={() => { setDialog(null); resetRegistrationState(); }}><X size={18} /></button></div>
             <div className="method-options">
-              <button onClick={() => setDialog("pfx")}>
+              <button onClick={() => { resetRegistrationState(); setDialog("pfx"); }}>
                 <span className="method-icon"><FileKey2 size={22} /></span>
                 <span><strong>Arquivo PFX ou P12</strong><small>Selecionar um certificado salvo neste computador.</small></span>
                 <ChevronRight size={17} />
@@ -590,11 +670,35 @@ export function App() {
       {dialog === "pfx" && (
         <div className="dialog-backdrop" role="presentation">
           <form className="dialog" onSubmit={registerPfx}>
-            <div className="dialog-header"><div><h2>Cadastrar com PFX</h2><p>Selecione o arquivo depois de confirmar.</p></div><button type="button" className="icon-button" onClick={() => setDialog(null)}><X size={18} /></button></div>
+            <div className="dialog-header"><div><h2>Cadastrar com PFX</h2><p>Selecione o arquivo depois de confirmar.</p></div><button type="button" className="icon-button" onClick={() => { setDialog(null); resetRegistrationState(); }}><X size={18} /></button></div>
+            <div className="cnpj-list-field">
+              <span>CNPJs consultados</span>
+              {queryCnpjs.map((cnpj, index) => (
+                <div className="cnpj-row" key={index}>
+                  <input type="text" inputMode="numeric" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
+                  {queryCnpjs.length > 1 && <button type="button" className="icon-button" title="Remover CNPJ" onClick={() => removeQueryCnpjField(index)}><X size={15} /></button>}
+                </div>
+              ))}
+              <button type="button" className="button secondary compact" onClick={addQueryCnpjField}><Plus size={15} /> Adicionar filial</button>
+            </div>
             <label>Senha do certificado<input type="password" required autoFocus value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            <div className="inline-info">Use o CNPJ consultado para cadastrar uma matriz ou filial da mesma raiz do certificado.</div>
+            {dialogMessage && <div className="dialog-error">{dialogMessage}</div>}
+            {registrationResult?.has_invalid && (
+              <div className="invalid-cnpj-list">
+                {registrationResult.invalid.map((item) => (
+                  <div key={`${item.cnpj}-${item.message}`}><strong>{item.cnpj || "CNPJ vazio"}</strong><span>{item.message}</span></div>
+                ))}
+                {registrationResult.valid_cnpjs.length > 0 && (
+                  <button type="button" className="button primary compact" onClick={() => submitPfxRegistration(true)}>
+                    Continuar com {registrationResult.valid_cnpjs.length} válido(s)
+                  </button>
+                )}
+              </div>
+            )}
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span><strong>Armazenar certificado e senha</strong><small>Protegidos pela credencial do Windows para consultas futuras.</small></span></label>
             {!remember && <div className="inline-info">As notas continuarão salvas, mas o arquivo e a senha serão solicitados em cada nova consulta.</div>}
-            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button><button className="button primary"><FileKey2 size={17} /> Selecionar arquivo</button></div>
+            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => { setDialog(null); resetRegistrationState(); }}>Cancelar</button><button className="button primary"><FileKey2 size={17} /> Selecionar arquivo</button></div>
           </form>
         </div>
       )}
@@ -602,7 +706,31 @@ export function App() {
       {dialog === "windows" && (
         <div className="dialog-backdrop">
           <div className="dialog wide">
-            <div className="dialog-header"><div><h2>Certificados do Windows</h2><p>Repositório Pessoal do usuário atual</p></div><button className="icon-button" onClick={() => setDialog(null)}><X size={18} /></button></div>
+            <div className="dialog-header"><div><h2>Certificados do Windows</h2><p>Repositório Pessoal do usuário atual</p></div><button className="icon-button" onClick={() => { setDialog(null); resetRegistrationState(); }}><X size={18} /></button></div>
+            <div className="cnpj-list-field windows-query-field">
+              <span>CNPJs consultados</span>
+              {queryCnpjs.map((cnpj, index) => (
+                <div className="cnpj-row" key={index}>
+                  <input type="text" inputMode="numeric" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
+                  {queryCnpjs.length > 1 && <button type="button" className="icon-button" title="Remover CNPJ" onClick={() => removeQueryCnpjField(index)}><X size={15} /></button>}
+                </div>
+              ))}
+              <button type="button" className="button secondary compact" onClick={addQueryCnpjField}><Plus size={15} /> Adicionar filial</button>
+            </div>
+            <div className="inline-info">Selecione um certificado de matriz ou filial e informe outro CNPJ apenas quando a raiz for a mesma.</div>
+            {dialogMessage && <div className="dialog-error">{dialogMessage}</div>}
+            {registrationResult?.has_invalid && (
+              <div className="invalid-cnpj-list">
+                {registrationResult.invalid.map((item) => (
+                  <div key={`${item.cnpj}-${item.message}`}><strong>{item.cnpj || "CNPJ vazio"}</strong><span>{item.message}</span></div>
+                ))}
+                {registrationResult.valid_cnpjs.length > 0 && pendingWindowsCertificate && (
+                  <button type="button" className="button primary compact" onClick={() => registerWindows(pendingWindowsCertificate, true)}>
+                    Continuar com {registrationResult.valid_cnpjs.length} válido(s)
+                  </button>
+                )}
+              </div>
+            )}
             <div className="certificate-list">
               {windowsCertificates.map((certificate) => (
                 <button key={certificate.thumbprint} onClick={() => registerWindows(certificate)}>

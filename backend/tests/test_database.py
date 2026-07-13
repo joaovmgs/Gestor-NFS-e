@@ -1,4 +1,5 @@
 from nfse_desktop.database import Database
+from nfse_desktop.api import _save_company_variants
 from nfse_desktop.repository import Repository
 from nfse_desktop.sync import SyncService
 
@@ -13,6 +14,7 @@ def test_company_round_trip(tmp_path) -> None:
             "cnpj": "12345678000190",
             "legal_name": "Empresa Teste",
             "certificate_source": "pfx",
+            "certificate_cnpj": "12345678000414",
             "remember_certificate": False,
             "certificate_reference": None,
             "certificate_expires_at": "2030-01-01T00:00:00Z",
@@ -22,6 +24,7 @@ def test_company_round_trip(tmp_path) -> None:
     company = repository.get_company("12345678000190")
     assert company is not None
     assert company["legal_name"] == "Empresa Teste"
+    assert company["certificate_cnpj"] == "12345678000414"
     assert company["last_nsu"] == 0
     settings = repository.get_settings()
     assert settings["notes_directory"] == str(tmp_path / "Notas")
@@ -169,6 +172,45 @@ def test_delete_company_removes_database_history(tmp_path) -> None:
     assert repository.list_documents("12345678000190")["total"] == 0
     assert repository.list_sync_logs("12345678000190") == []
     assert repository.delete_company("12345678000190") is False
+
+
+def test_company_batch_requires_confirmation_before_partial_save(tmp_path) -> None:
+    database = Database(tmp_path / "batch-company.db")
+    database.initialize()
+    repository = Repository(database)
+
+    preview = _save_company_variants(
+        repository,
+        certificate_cnpj="08244957000438",
+        legal_name="Prime Teste",
+        certificate_source="pfx",
+        remember_certificate=True,
+        certificate_reference=None,
+        certificate_expires_at="2027-03-02T00:00:00Z",
+        requested_cnpjs=["08244957000100", "12345678000190"],
+        allow_partial=False,
+    )
+
+    assert preview["has_invalid"] is True
+    assert preview["valid_cnpjs"] == ["08244957000100"]
+    assert repository.list_companies() == []
+
+    saved = _save_company_variants(
+        repository,
+        certificate_cnpj="08244957000438",
+        legal_name="Prime Teste",
+        certificate_source="pfx",
+        remember_certificate=True,
+        certificate_reference=None,
+        certificate_expires_at="2027-03-02T00:00:00Z",
+        requested_cnpjs=["08244957000100", "12345678000190"],
+        allow_partial=True,
+    )
+
+    assert saved["has_invalid"] is True
+    assert [company["cnpj"] for company in saved["companies"]] == ["08244957000100"]
+    assert repository.get_company("08244957000100")["certificate_cnpj"] == "08244957000438"
+    assert repository.get_company("12345678000190") is None
 
 
 def test_e2220_finishes_sync_without_error(tmp_path) -> None:

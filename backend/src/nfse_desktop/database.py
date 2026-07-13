@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS companies (
   cnpj TEXT PRIMARY KEY,
   legal_name TEXT NOT NULL,
   certificate_source TEXT NOT NULL CHECK(certificate_source IN ('pfx', 'windows')),
+  certificate_cnpj TEXT,
   remember_certificate INTEGER NOT NULL DEFAULT 0,
   certificate_reference TEXT,
   certificate_expires_at TEXT,
@@ -87,6 +88,19 @@ class Database:
                 connection.execute("ALTER TABLE documents ADD COLUMN event_type TEXT")
             if "note_number" not in document_columns:
                 connection.execute("ALTER TABLE documents ADD COLUMN note_number TEXT")
+            company_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(companies)").fetchall()
+            }
+            if "certificate_cnpj" not in company_columns:
+                connection.execute("ALTER TABLE companies ADD COLUMN certificate_cnpj TEXT")
+                connection.execute(
+                    """
+                    UPDATE companies
+                    SET certificate_cnpj = cnpj
+                    WHERE certificate_cnpj IS NULL OR certificate_cnpj = ''
+                    """
+                )
             connection.execute(
                 """
                 DELETE FROM sync_logs

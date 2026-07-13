@@ -7,7 +7,11 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 import pytest
 
-from nfse_desktop.certificates import inspect_pfx, validate_certificate_expiration
+from nfse_desktop.certificates import (
+    inspect_pfx,
+    resolve_consulted_cnpj,
+    validate_certificate_expiration,
+)
 
 
 def make_pfx(
@@ -68,3 +72,19 @@ def test_validate_certificate_expiration_rejects_expired_windows_payload() -> No
     expires_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     with pytest.raises(ValueError, match="vencido"):
         validate_certificate_expiration(expires_at)
+
+
+def test_resolve_consulted_cnpj_accepts_same_root_branch() -> None:
+    assert (
+        resolve_consulted_cnpj("08244957000438", "08.244.957/0001-00")
+        == "08244957000100"
+    )
+    assert (
+        resolve_consulted_cnpj("08.244.957/0004-38", "08244957000100")
+        == "08244957000100"
+    )
+
+
+def test_resolve_consulted_cnpj_rejects_different_root() -> None:
+    with pytest.raises(ValueError, match="mesma raiz"):
+        resolve_consulted_cnpj("08244957000438", "12.345.678/0001-90")

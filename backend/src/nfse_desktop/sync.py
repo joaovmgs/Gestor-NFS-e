@@ -54,7 +54,11 @@ class SyncService:
                                 "downloaded": downloaded,
                             }
                         try:
-                            result = client.fetch_by_nsu(current_nsu, lote=True)
+                            result = client.fetch_by_nsu(
+                                current_nsu,
+                                cnpj_consulta=cnpj,
+                                lote=True,
+                            )
                         except TooManyRequestsError:
                             diagnostic = (
                                 f"HTTP 429 | NSU {current_nsu} | "
