@@ -55,7 +55,7 @@ class NfseClient:
     ) -> NsuQueryResult:
         params: dict[str, Any] = {"lote": str(lote).lower()}
         if cnpj_consulta:
-            params["cnpjConsulta"] = _only_digits(cnpj_consulta)
+            params["cnpjConsulta"] = _cnpj_identifier(cnpj_consulta)
 
         data = self._transport.get_json(
             f"{self.endpoints.adn}/DFe/{ultimo_nsu}",
@@ -142,3 +142,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _only_digits(value: str) -> str:
     return "".join(char for char in value if char.isdigit())
+
+
+def _cnpj_identifier(value: str) -> str:
+    return "".join(char for char in value.upper() if char.isalnum())

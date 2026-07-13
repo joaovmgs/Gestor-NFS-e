@@ -227,7 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.delete("/companies/{cnpj}", dependencies=[Depends(authorize)])
     def delete_company(cnpj: str):
-        normalized_cnpj = "".join(character for character in cnpj if character.isdigit())
+        normalized_cnpj = normalize_cnpj(cnpj)
         if len(normalized_cnpj) != 14:
             raise HTTPException(status_code=422, detail="CNPJ invalido.")
         removed = repository.delete_company(normalized_cnpj)

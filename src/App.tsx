@@ -32,9 +32,11 @@ type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "delete-compa
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
-  value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  /^\d{14}$/.test(value)
+    ? value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+    : value;
 
-const onlyDigits = (value: string) => value.replace(/\D/g, "");
+const normalizeCnpj = (value: string) => value.replace(/[^0-9a-z]/gi, "").toUpperCase();
 
 const formatMoney = (value?: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value ?? 0);
@@ -121,7 +123,7 @@ export function App() {
 
   const selected = companies.find((company) => company.cnpj === selectedCnpj);
   const normalizedQueryCnpjs = () =>
-    queryCnpjs.map((cnpj) => onlyDigits(cnpj)).filter(Boolean);
+    queryCnpjs.map((cnpj) => normalizeCnpj(cnpj)).filter(Boolean);
 
   function resetRegistrationState() {
     setPassword("");
@@ -681,7 +683,7 @@ export function App() {
               <span>CNPJs consultados</span>
               {queryCnpjs.map((cnpj, index) => (
                 <div className="cnpj-row" key={index}>
-                  <input type="text" inputMode="numeric" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
+                  <input type="text" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
                   {queryCnpjs.length > 1 && <button type="button" className="icon-button" title="Remover CNPJ" onClick={() => removeQueryCnpjField(index)}><X size={15} /></button>}
                 </div>
               ))}
@@ -717,7 +719,7 @@ export function App() {
               <span>CNPJs consultados</span>
               {queryCnpjs.map((cnpj, index) => (
                 <div className="cnpj-row" key={index}>
-                  <input type="text" inputMode="numeric" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
+                  <input type="text" placeholder="Vazio para usar o CNPJ do certificado" value={cnpj} onChange={(event) => updateQueryCnpj(index, event.target.value)} />
                   {queryCnpjs.length > 1 && <button type="button" className="icon-button" title="Remover CNPJ" onClick={() => removeQueryCnpjField(index)}><X size={15} /></button>}
                 </div>
               ))}

@@ -19,10 +19,10 @@ class NfseSummary:
     valor_liquido: float | None
 
     def classificar_para_cnpj(self, cnpj: str) -> str:
-        cnpj_digits = only_digits(cnpj)
-        if self.emitente_cnpj == cnpj_digits:
+        cnpj_identifier = normalize_cnpj(cnpj)
+        if self.emitente_cnpj == cnpj_identifier:
             return "emitida"
-        if self.tomador_cnpj == cnpj_digits:
+        if self.tomador_cnpj == cnpj_identifier:
             return "recebida"
         return "outro"
 
@@ -34,17 +34,17 @@ def summarize_nfse_xml(xml: str) -> NfseSummary:
         numero=_text(root, "nNFSe"),
         competencia=_date(_text(root, "dCompet")),
         geracao=_datetime(_text(root, "dhEmi") or _text(root, "dhProc")),
-        emitente_cnpj=_section_text(root, "emit", "CNPJ"),
+        emitente_cnpj=normalize_cnpj(_section_text(root, "emit", "CNPJ")),
         emitente_nome=_section_text(root, "emit", "xNome"),
-        tomador_cnpj=_section_text(root, "toma", "CNPJ"),
+        tomador_cnpj=normalize_cnpj(_section_text(root, "toma", "CNPJ")),
         tomador_nome=_section_text(root, "toma", "xNome"),
         valor_servico=_float(_text(root, "vServ")),
         valor_liquido=_float(_text(root, "vLiq")),
     )
 
 
-def only_digits(value: str | None) -> str:
-    return "".join(char for char in str(value or "") if char.isdigit())
+def normalize_cnpj(value: str | None) -> str:
+    return "".join(char for char in str(value or "").upper() if char.isalnum())
 
 
 def _text(root: ET.Element, tag: str) -> str | None:

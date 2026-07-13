@@ -38,19 +38,19 @@ def validate_certificate_expiration(expires_at: str) -> None:
 
 
 def normalize_cnpj(value: str) -> str:
-    return re.sub(r"\D", "", value)
+    return re.sub(r"[^0-9A-Za-z]", "", value).upper()
 
 
 def resolve_consulted_cnpj(certificate_cnpj: str, requested_cnpj: str | None = None) -> str:
-    certificate_digits = normalize_cnpj(certificate_cnpj)
-    requested_digits = normalize_cnpj(requested_cnpj or certificate_digits)
-    if len(certificate_digits) != 14:
+    certificate_identifier = normalize_cnpj(certificate_cnpj)
+    requested_identifier = normalize_cnpj(requested_cnpj or certificate_identifier)
+    if len(certificate_identifier) != 14:
         raise ValueError("CNPJ do certificado invalido.")
-    if len(requested_digits) != 14:
+    if len(requested_identifier) != 14:
         raise ValueError("CNPJ consultado invalido.")
-    if certificate_digits[:8] != requested_digits[:8]:
+    if certificate_identifier[:8] != requested_identifier[:8]:
         raise ValueError("O CNPJ consultado precisa ter a mesma raiz do CNPJ do certificado.")
-    return requested_digits
+    return requested_identifier
 
 
 def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
@@ -96,14 +96,18 @@ def _cnpj_from_certificate(certificate: x509.Certificate) -> str:
         extension = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         for other_name in extension.value.get_values_for_type(x509.OtherName):
             if other_name.type_id == CNPJ_OID:
-                digits = re.sub(r"\D", "", _decode_der_string(other_name.value))
-                if len(digits) == 14:
-                    return digits
+                identifier = normalize_cnpj(_decode_der_string(other_name.value))
+                if len(identifier) == 14:
+                    return identifier
     except x509.ExtensionNotFound:
         pass
 
-    digits = re.findall(r"\d{14}", certificate.subject.rfc4514_string())
-    return digits[0] if digits else ""
+    identifiers = re.findall(
+        r"(?<![0-9A-Za-z])(?=[0-9A-Za-z]{14}(?![0-9A-Za-z]))"
+        r"(?=[0-9A-Za-z]*\d)[0-9A-Za-z]{14}",
+        certificate.subject.rfc4514_string(),
+    )
+    return identifiers[0].upper() if identifiers else ""
 
 
 def _decode_der_string(value: bytes) -> str:

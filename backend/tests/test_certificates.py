@@ -83,6 +83,10 @@ def test_resolve_consulted_cnpj_accepts_same_root_branch() -> None:
         resolve_consulted_cnpj("08.244.957/0004-38", "08244957000100")
         == "08244957000100"
     )
+    assert (
+        resolve_consulted_cnpj("A8244957000438", "A8.244.957/0001-00")
+        == "A8244957000100"
+    )
 
 
 def test_resolve_consulted_cnpj_rejects_different_root() -> None:
