@@ -1,45 +1,66 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+async function invokeClean<T>(channel: string, ...args: unknown[]): Promise<T> {
+  try {
+    return await ipcRenderer.invoke(channel, ...args);
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      raw
+        .replace(/^Error invoking remote method '[^']+':\s*/u, "")
+        .replace(/^Error:\s*/u, "")
+    );
+  }
+}
+
 contextBridge.exposeInMainWorld("nfse", {
-  listCompanies: () => ipcRenderer.invoke("companies:list"),
-  registerPfxCompany: (input: { password: string; remember: boolean }) =>
-    ipcRenderer.invoke("companies:register-pfx", input),
-  listWindowsCertificates: () => ipcRenderer.invoke("certificates:list-windows"),
-  registerWindowsCompany: (certificate: WindowsCertificate) =>
-    ipcRenderer.invoke("companies:register-windows", certificate),
-  deleteCompany: (cnpj: string) => ipcRenderer.invoke("companies:delete", cnpj),
-  listDocuments: (input: DocumentQuery) => ipcRenderer.invoke("documents:list", input),
+  listCompanies: () => invokeClean("companies:list"),
+  registerPfxCompany: (input: {
+    password: string;
+    remember: boolean;
+    queryCnpj?: string;
+    queryCnpjs?: string[];
+    allowPartial?: boolean;
+  }) => invokeClean("companies:register-pfx", input),
+  listWindowsCertificates: () => invokeClean("certificates:list-windows"),
+  registerWindowsCompany: (
+    certificate: WindowsCertificate,
+    queryCnpj?: string,
+    allowPartial = false
+  ) => invokeClean("companies:register-windows", { certificate, queryCnpj, allowPartial }),
+  deleteCompany: (cnpj: string) => invokeClean("companies:delete", cnpj),
+  listDocuments: (input: DocumentQuery) => invokeClean("documents:list", input),
   downloadDocuments: (input: DownloadQuery) =>
-    ipcRenderer.invoke(
+    invokeClean(
       "documents:download",
       input.cnpj,
       input.startDate,
       input.endDate,
       input.direction
     ),
-  getExportQueueStatus: () => ipcRenderer.invoke("exports:status"),
+  getExportQueueStatus: () => invokeClean("exports:status"),
   onExportQueueStatus: (callback: (status: ExportQueueStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: ExportQueueStatus) =>
       callback(status);
     ipcRenderer.on("exports:status", listener);
     return () => ipcRenderer.removeListener("exports:status", listener);
   },
-  getSyncQueueStatus: () => ipcRenderer.invoke("sync:status"),
+  getSyncQueueStatus: () => invokeClean("sync:status"),
   onSyncQueueStatus: (callback: (status: ExportQueueStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: ExportQueueStatus) =>
       callback(status);
     ipcRenderer.on("sync:status", listener);
     return () => ipcRenderer.removeListener("sync:status", listener);
   },
-  listSyncLogs: (cnpj: string) => ipcRenderer.invoke("sync:logs", cnpj),
+  listSyncLogs: (cnpj: string) => invokeClean("sync:logs", cnpj),
   syncCompany: (cnpj: string, password?: string, notify = true) =>
-    ipcRenderer.invoke("companies:sync", { cnpj, password, notify }),
-  getSettings: () => ipcRenderer.invoke("settings:get"),
-  updateSettings: (settings: AppSettings) => ipcRenderer.invoke("settings:update", settings),
-  selectNotesDirectory: () => ipcRenderer.invoke("settings:select-directory"),
-  minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
-  toggleMaximizeWindow: () => ipcRenderer.invoke("window:toggle-maximize"),
-  closeWindow: () => ipcRenderer.invoke("window:close")
+    invokeClean("companies:sync", { cnpj, password, notify }),
+  getSettings: () => invokeClean("settings:get"),
+  updateSettings: (settings: AppSettings) => invokeClean("settings:update", settings),
+  selectNotesDirectory: () => invokeClean("settings:select-directory"),
+  minimizeWindow: () => invokeClean("window:minimize"),
+  toggleMaximizeWindow: () => invokeClean("window:toggle-maximize"),
+  closeWindow: () => invokeClean("window:close")
 });
 
 interface WindowsCertificate {

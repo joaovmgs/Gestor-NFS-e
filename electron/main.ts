@@ -60,10 +60,18 @@ interface SyncRequest {
   notify: boolean;
 }
 
+interface CompanyRegistrationResult {
+  companies: Array<{ cnpj: string }>;
+  valid_cnpjs: string[];
+  invalid: Array<{ cnpj: string; message: string }>;
+  has_invalid: boolean;
+}
+
 interface CompanyRecord {
   cnpj: string;
   legal_name: string;
   certificate_source: "pfx" | "windows";
+  certificate_cnpj?: string;
   certificate_reference?: string;
   last_nsu: number;
 }
@@ -340,7 +348,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
     try {
       const result = await execFileAsync(
         windowsHelperPath(),
-        ["fetch", company.certificate_reference, String(requestedNsu)],
+        ["fetch", company.certificate_reference, String(requestedNsu), company.cnpj],
         {
           windowsHide: true,
           maxBuffer: 50 * 1024 * 1024,
@@ -578,42 +586,55 @@ function registerIpc(): void {
     );
     form.set("password", input.password);
     form.set("remember_certificate", String(input.remember));
-    const company = await api<{ cnpj: string }>("/companies/pfx", {
+    if (input.queryCnpjs?.length) {
+      form.set("query_cnpjs", input.queryCnpjs.join("\n"));
+    } else if (input.queryCnpj) {
+      form.set("query_cnpj", input.queryCnpj);
+    }
+    form.set("allow_partial", String(Boolean(input.allowPartial)));
+    const result = await api<CompanyRegistrationResult>("/companies/pfx", {
       method: "POST",
       body: form
     });
-    if (input.remember) {
-      const reference = await saveCredential(company.cnpj, input.password, pfx);
-      const updateForm = new FormData();
-      updateForm.set(
-        "certificate",
-        new Blob([Uint8Array.from(pfx)]),
-        path.basename(selection.filePaths[0])
-      );
-      updateForm.set("password", input.password);
-      updateForm.set("remember_certificate", "true");
-      updateForm.set("credential_reference", reference);
-      const savedCompany = await api<{ cnpj: string }>("/companies/pfx", {
-        method: "POST",
-        body: updateForm
-      });
-      removedCompanyCnpjs.delete(savedCompany.cnpj);
-      return savedCompany;
+    if (result.has_invalid && !input.allowPartial) {
+      return result;
     }
-    await removeCredential(company.cnpj);
-    removedCompanyCnpjs.delete(company.cnpj);
-    return company;
+    if (input.remember) {
+      for (const company of result.companies) {
+        await saveCredential(company.cnpj, input.password, pfx);
+      }
+    }
+    if (!input.remember) {
+      for (const company of result.companies) {
+        await removeCredential(company.cnpj);
+      }
+    }
+    for (const company of result.companies) {
+      removedCompanyCnpjs.delete(company.cnpj);
+    }
+    return result;
   });
   ipcMain.handle("certificates:list-windows", listWindowsCertificates);
-  ipcMain.handle("companies:register-windows", (_event, certificate: WindowsCertificate) => {
+  ipcMain.handle("companies:register-windows", (_event, input: {
+    certificate: WindowsCertificate;
+    queryCnpj?: string;
+    allowPartial?: boolean;
+  }) => {
+    const certificate = input.certificate;
     validateWindowsCertificate(certificate);
-    return api<{ cnpj: string }>("/companies/windows", {
+    return api<CompanyRegistrationResult>("/companies/windows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(certificate)
-    }).then((company) => {
-      removedCompanyCnpjs.delete(company.cnpj);
-      return company;
+      body: JSON.stringify({
+        ...certificate,
+        queryCnpj: input.queryCnpj,
+        allowPartial: Boolean(input.allowPartial)
+      })
+    }).then((result) => {
+      for (const company of result.companies) {
+        removedCompanyCnpjs.delete(company.cnpj);
+      }
+      return result;
     });
   });
   ipcMain.handle("companies:delete", async (_event, cnpj: string) => {

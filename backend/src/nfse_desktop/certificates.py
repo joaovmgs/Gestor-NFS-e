@@ -37,6 +37,22 @@ def validate_certificate_expiration(expires_at: str) -> None:
     validate_certificate_period(datetime.min.replace(tzinfo=timezone.utc), expiration)
 
 
+def normalize_cnpj(value: str) -> str:
+    return re.sub(r"\D", "", value)
+
+
+def resolve_consulted_cnpj(certificate_cnpj: str, requested_cnpj: str | None = None) -> str:
+    certificate_digits = normalize_cnpj(certificate_cnpj)
+    requested_digits = normalize_cnpj(requested_cnpj or certificate_digits)
+    if len(certificate_digits) != 14:
+        raise ValueError("CNPJ do certificado invalido.")
+    if len(requested_digits) != 14:
+        raise ValueError("CNPJ consultado invalido.")
+    if certificate_digits[:8] != requested_digits[:8]:
+        raise ValueError("O CNPJ consultado precisa ter a mesma raiz do CNPJ do certificado.")
+    return requested_digits
+
+
 def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
     try:
         private_key, certificate, _chain = pkcs12.load_key_and_certificates(

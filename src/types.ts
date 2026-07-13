@@ -2,6 +2,7 @@ export interface Company {
   cnpj: string;
   legal_name: string;
   certificate_source: "pfx" | "windows";
+  certificate_cnpj?: string;
   remember_certificate: number;
   certificate_reference?: string;
   certificate_expires_at: string;
@@ -68,11 +69,28 @@ export interface SyncQueueResult {
   alreadyQueued: boolean;
 }
 
+export interface CompanyRegistrationResult {
+  companies: Company[];
+  valid_cnpjs: string[];
+  invalid: Array<{ cnpj: string; message: string }>;
+  has_invalid: boolean;
+}
+
 export interface NfseApi {
   listCompanies(): Promise<Company[]>;
-  registerPfxCompany(input: { password: string; remember: boolean }): Promise<Company | null>;
+  registerPfxCompany(input: {
+    password: string;
+    remember: boolean;
+    queryCnpj?: string;
+    queryCnpjs?: string[];
+    allowPartial?: boolean;
+  }): Promise<CompanyRegistrationResult | null>;
   listWindowsCertificates(): Promise<WindowsCertificate[]>;
-  registerWindowsCompany(certificate: WindowsCertificate): Promise<Company>;
+  registerWindowsCompany(
+    certificate: WindowsCertificate,
+    queryCnpj?: string,
+    allowPartial?: boolean
+  ): Promise<CompanyRegistrationResult>;
   deleteCompany(cnpj: string): Promise<{ removed: boolean }>;
   listDocuments(input: {
     cnpj: string;

@@ -10,7 +10,7 @@ Console.OutputEncoding = new UTF8Encoding(false);
 
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("Uso: Nfse.WindowsCertificates list | fetch <thumbprint> <nsu>");
+    Console.Error.WriteLine("Uso: Nfse.WindowsCertificates list | fetch <thumbprint> <nsu> [cnpjConsulta]");
     return 2;
 }
 
@@ -20,7 +20,7 @@ if (string.Equals(args[0], "list", StringComparison.OrdinalIgnoreCase))
     return 0;
 }
 
-if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.Length == 3)
+if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.Length is 3 or 4)
 {
     var certificate = FindCertificate(args[1]);
     if (certificate is null)
@@ -34,6 +34,12 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
         Console.Error.WriteLine("NSU invalido.");
         return 4;
     }
+    var cnpjConsulta = args.Length == 4 ? OnlyDigits(args[3]) : string.Empty;
+    if (!string.IsNullOrEmpty(cnpjConsulta) && cnpjConsulta.Length != 14)
+    {
+        Console.Error.WriteLine("CNPJ de consulta invalido.");
+        return 4;
+    }
 
     using (certificate)
     using (var handler = new HttpClientHandler())
@@ -45,8 +51,11 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
         client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         try
         {
+            var query = string.IsNullOrEmpty(cnpjConsulta)
+                ? "lote=true"
+                : $"lote=true&cnpjConsulta={WebUtility.UrlEncode(cnpjConsulta)}";
             using var response = await client.GetAsync(
-                $"https://adn.nfse.gov.br/contribuintes/DFe/{nsu}?lote=true"
+                $"https://adn.nfse.gov.br/contribuintes/DFe/{nsu}?{query}"
             );
             var body = await response.Content.ReadAsStringAsync();
             if (string.IsNullOrWhiteSpace(body))
@@ -133,6 +142,8 @@ static string ExtractCnpj(X509Certificate2 certificate)
     }
     return string.Empty;
 }
+
+static string OnlyDigits(string value) => Regex.Replace(value, @"\D", "");
 
 static JsonSerializerOptions JsonOptions() => new()
 {

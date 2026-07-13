@@ -80,12 +80,13 @@ class Repository:
             connection.execute(
                 """
                 INSERT INTO companies (
-                  cnpj, legal_name, certificate_source, remember_certificate,
+                  cnpj, legal_name, certificate_source, certificate_cnpj, remember_certificate,
                   certificate_reference, certificate_expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(cnpj) DO UPDATE SET
                   legal_name=excluded.legal_name,
                   certificate_source=excluded.certificate_source,
+                  certificate_cnpj=excluded.certificate_cnpj,
                   remember_certificate=excluded.remember_certificate,
                   certificate_reference=excluded.certificate_reference,
                   certificate_expires_at=excluded.certificate_expires_at,
@@ -95,6 +96,7 @@ class Repository:
                     company["cnpj"],
                     company["legal_name"],
                     company["certificate_source"],
+                    company.get("certificate_cnpj") or company["cnpj"],
                     int(company["remember_certificate"]),
                     company.get("certificate_reference"),
                     company.get("certificate_expires_at"),
