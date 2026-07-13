@@ -47,6 +47,7 @@ class SyncLogPayload(BaseModel):
 class SettingsPayload(BaseModel):
     notes_directory: str
     notifications_enabled: bool
+    environment: str = "producao"
 
 
 def _requested_cnpjs(primary: str | None, batch: str | None) -> list[str | None]:
@@ -165,7 +166,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         notes_directory = payload.notes_directory.strip()
         if not notes_directory:
             raise HTTPException(status_code=422, detail="Selecione uma pasta para as notas.")
-        return repository.update_settings(notes_directory, payload.notifications_enabled)
+        if payload.environment not in ("producao", "producao_restrita"):
+            raise HTTPException(status_code=422, detail="Ambiente invalido.")
+        return repository.update_settings(
+            notes_directory,
+            payload.notifications_enabled,
+            payload.environment,
+        )
 
     @app.post("/companies/pfx", dependencies=[Depends(authorize)])
     async def create_pfx_company(

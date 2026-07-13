@@ -170,6 +170,7 @@ td.money { font-weight: 700; text-align: right; }
 .settings-form { display: grid; gap: 18px; }
 .settings-field { display: grid; gap: 7px; color: #44524d; font-size: 12px; font-weight: 700; }
 .settings-field > small { color: #74817c; font-size: 10px; font-weight: 400; }
+.settings-field select { height: 36px; padding: 0 10px; border: 1px solid #cbd4d0; background: #fff; color: #34433e; border-radius: 5px; font-size: 12px; }
 .directory-input { display: grid; grid-template-columns: 1fr 36px; gap: 7px; }
 .directory-input input { min-width: 0; height: 36px; padding: 0 10px; border: 1px solid #cbd4d0; background: #f6f8f7; color: #44524d; border-radius: 5px; font-size: 11px; }
 .directory-input .icon-button { width: 36px; height: 36px; }

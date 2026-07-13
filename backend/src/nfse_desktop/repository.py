@@ -31,6 +31,7 @@ class Repository:
                 (
                     ("notes_directory", default_notes_dir),
                     ("notifications_enabled", "1"),
+                    ("environment", "producao"),
                 ),
             )
 
@@ -43,9 +44,15 @@ class Repository:
         return {
             "notes_directory": values.get("notes_directory", ""),
             "notifications_enabled": values.get("notifications_enabled", "1") == "1",
+            "environment": values.get("environment", "producao"),
         }
 
-    def update_settings(self, notes_directory: str, notifications_enabled: bool) -> dict[str, Any]:
+    def update_settings(
+        self,
+        notes_directory: str,
+        notifications_enabled: bool,
+        environment: str,
+    ) -> dict[str, Any]:
         with self.database.connect() as connection:
             connection.executemany(
                 """
@@ -58,6 +65,7 @@ class Repository:
                 (
                     ("notes_directory", notes_directory),
                     ("notifications_enabled", "1" if notifications_enabled else "0"),
+                    ("environment", environment),
                 ),
             )
         return self.get_settings()

@@ -58,6 +58,9 @@ const syncStatusLabel = (status: string) => {
   return labels[status] ?? status;
 };
 
+const environmentLabel = (environment?: AppSettings["environment"]) =>
+  environment === "producao_restrita" ? "Produção restrita" : "Produção";
+
 const currentMonthRange = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -110,7 +113,8 @@ export function App() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
     notes_directory: "",
-    notifications_enabled: true
+    notifications_enabled: true,
+    environment: "producao"
   });
   const [message, setMessage] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -218,6 +222,7 @@ export function App() {
       setMessage(error.message);
       setLoading(false);
     });
+    window.nfse.getSettings().then(setSettings).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -542,6 +547,7 @@ export function App() {
                   <RefreshCw className={selectedSyncActive ? "spinning" : ""} size={16} /> {selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
                 </button>
               </div>
+              <div><span>Ambiente</span><strong>{environmentLabel(settings.environment)}</strong></div>
             </section>
             <section className={`sync-log-panel ${showSyncLogs ? "open" : ""}`}>
               <button className="sync-log-toggle" onClick={() => setShowSyncLogs((current) => !current)}>
@@ -772,6 +778,14 @@ export function App() {
               <label className="check-row settings-check">
                 <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => setSettings((current) => ({ ...current, notifications_enabled: event.target.checked }))} />
                 <span><strong>Notificações do Windows</strong><small>Avisar quando uma sincronização for concluída.</small></span>
+              </label>
+              <label className="settings-field">
+                <span>Ambiente de consulta</span>
+                <select value={settings.environment} onChange={(event) => setSettings((current) => ({ ...current, environment: event.target.value as AppSettings["environment"] }))}>
+                  <option value="producao">Produção</option>
+                  <option value="producao_restrita">Produção restrita</option>
+                </select>
+                <small>Produção restrita deve ser usada apenas para testes e diagnóstico.</small>
               </label>
               <a className="settings-repository" href={repositoryUrl} target="_blank" rel="noreferrer">
                 <Github size={20} />

@@ -99,4 +99,5 @@ interface ExportQueueStatus {
 interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
+  environment: "producao" | "producao_restrita";
 }
