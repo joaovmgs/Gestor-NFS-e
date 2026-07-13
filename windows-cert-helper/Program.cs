@@ -34,7 +34,7 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
         Console.Error.WriteLine("NSU invalido.");
         return 4;
     }
-    var cnpjConsulta = args.Length >= 4 ? OnlyDigits(args[3]) : string.Empty;
+    var cnpjConsulta = args.Length >= 4 ? NormalizeCnpj(args[3]) : string.Empty;
     var ambiente = args.Length == 5 ? args[4] : "producao";
     if (!string.IsNullOrEmpty(cnpjConsulta) && cnpjConsulta.Length != 14)
     {
@@ -143,16 +143,19 @@ static string ExtractCnpj(X509Certificate2 certificate)
 
     foreach (var candidate in candidates)
     {
-        var matches = Regex.Matches(candidate, @"(?<!\d)\d{14}(?!\d)");
+        var matches = Regex.Matches(
+            candidate,
+            @"(?<![0-9A-Za-z])(?=[0-9A-Za-z]{14}(?![0-9A-Za-z]))(?=[0-9A-Za-z]*\d)[0-9A-Za-z]{14}"
+        );
         if (matches.Count > 0)
         {
-            return matches[0].Value;
+            return matches[0].Value.ToUpperInvariant();
         }
     }
     return string.Empty;
 }
 
-static string OnlyDigits(string value) => Regex.Replace(value, @"\D", "");
+static string NormalizeCnpj(string value) => Regex.Replace(value, @"[^0-9A-Za-z]", "").ToUpperInvariant();
 
 static JsonSerializerOptions JsonOptions() => new()
 {

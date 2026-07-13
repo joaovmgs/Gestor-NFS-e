@@ -7,7 +7,7 @@ export interface WindowsCertificate {
 }
 
 export function validateWindowsCertificate(certificate: WindowsCertificate): void {
-  const cnpj = certificate.cnpj.replace(/\D/g, "");
+  const cnpj = certificate.cnpj.replace(/[^0-9a-z]/gi, "");
   if (cnpj.length !== 14) {
     throw new Error("O certificado selecionado não possui um CNPJ válido.");
   }

@@ -21,6 +21,10 @@ test("accepts a valid Windows certificate payload", () => {
   assert.doesNotThrow(() => validateWindowsCertificate(certificate()));
 });
 
+test("accepts an alphanumeric CNPJ payload", () => {
+  assert.doesNotThrow(() => validateWindowsCertificate(certificate({ cnpj: "A8.244.957/0001-00" })));
+});
+
 test("rejects a Windows certificate without a valid CNPJ", () => {
   assert.throws(
     () => validateWindowsCertificate(certificate({ cnpj: "123" })),
