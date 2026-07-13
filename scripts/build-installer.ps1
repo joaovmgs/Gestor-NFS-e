@@ -29,7 +29,7 @@ New-Item -ItemType Directory -Path $backendStage, $helperStage, $weasyStage | Ou
     --paths (Join-Path $root "backend\src") `
     --collect-all nfse_desktop `
     --collect-all gov_nfse `
-    --collect-all danfse_nt008 `
+    --collect-all danfse_brasil `
     --collect-all weasyprint `
     --collect-all openpyxl `
     --hidden-import nfse_desktop.api `
@@ -59,4 +59,3 @@ try {
 finally {
     Pop-Location
 }
-

@@ -5,7 +5,7 @@ import re
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from danfse_nt008 import parse_danfse, render_danfse_pdf
+from danfse_brasil import parse_danfse, render_danfse_pdf
 
 from .report import generate_nfse_report_xlsx
 from .repository import Repository

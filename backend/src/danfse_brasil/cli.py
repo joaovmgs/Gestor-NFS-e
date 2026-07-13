@@ -13,7 +13,7 @@ from .xml import parse_danfse
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Gera o DANFSe conforme a NT 008.")
+    parser = argparse.ArgumentParser(description="Gera o DANFSe conforme as notas tecnicas da NFS-e nacional.")
     parser.add_argument("xml", type=Path, help="Arquivo XML da NFS-e.")
     parser.add_argument("-o", "--output", type=Path, default=Path("danfse-header.pdf"))
     parser.add_argument(
@@ -33,8 +33,12 @@ def main() -> None:
 
     data = parse_danfse(args.xml)
     issues = validate_danfse_data(data)
-    if issues:
-        for issue in issues:
+    errors = [issue for issue in issues if issue.severity == "error"]
+    warnings = [issue for issue in issues if issue.severity != "error"]
+    for issue in warnings:
+        print(f"AVISO: {issue.code}: {issue.message}")
+    if errors:
+        for issue in errors:
             print(f"ERRO: {issue.code}: {issue.message}")
         raise SystemExit(3)
 

@@ -144,7 +144,7 @@ src/                     Interface React
 electron/                Processo principal, IPC, filas e credenciais
 backend/src/nfse_desktop API local, SQLite, sincronização e exportação
 backend/src/gov_nfse     Cliente da API Nacional e leitura dos XMLs
-backend/src/danfse_nt008 Geração do DANFSe
+backend/src/danfse_brasil Geração do DANFSe
 windows-cert-helper/     Integração com certificados do Windows
 ```
 
