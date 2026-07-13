@@ -26,7 +26,54 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
 
     normal_xml = tmp_path / "normal.xml"
     cancelled_xml = tmp_path / "cancelada.xml"
-    normal_xml.write_text("<NFSe/>", encoding="utf-8")
+    normal_xml.write_text(
+        """
+        <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">
+          <infNFSe>
+            <nNFSe>123</nNFSe>
+            <DPS>
+              <infDPS>
+                <finNFSe>1</finNFSe>
+                <tpNFSeDebito>2</tpNFSeDebito>
+                <tpNFSeCredito>3</tpNFSeCredito>
+                <valores>
+                  <vServPrest><vServ>100.00</vServ></vServPrest>
+                  <trib>
+                    <tribFed>
+                      <vRetIRRF>1.10</vRetIRRF>
+                      <vRetCSLL>2.20</vRetCSLL>
+                      <vRetCP>3.30</vRetCP>
+                    </tribFed>
+                    <tribMun><tpRetISSQN>2</tpRetISSQN></tribMun>
+                  </trib>
+                </valores>
+                <IBSCBS>
+                  <valores>
+                    <trib>
+                      <gIBSCBSAjuste>
+                        <vIBS>4.40</vIBS>
+                        <vCBS>5.50</vCBS>
+                      </gIBSCBSAjuste>
+                    </trib>
+                  </valores>
+                </IBSCBS>
+              </infDPS>
+            </DPS>
+            <valores>
+              <vISSQN>6.60</vISSQN>
+              <vLiq>80.00</vLiq>
+            </valores>
+            <IBSCBS>
+              <totCIBS>
+                <gIBS><vIBSTot>7.70</vIBSTot></gIBS>
+                <gCBS><vCBS>8.80</vCBS></gCBS>
+              </totCIBS>
+            </IBSCBS>
+          </infNFSe>
+        </NFSe>
+        """,
+        encoding="utf-8",
+    )
     cancelled_xml.write_text("<NFSe/>", encoding="utf-8")
     base = {
         "company_cnpj": "12345678000190",
@@ -91,8 +138,17 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
             assert sheet["B6"].value == "Situação"
             assert sheet["B7"].value == "Autorizada"
             assert sheet["B8"].value == "Cancelada"
-            assert sheet["D6"].value == "IRRF retido (vRetIRRF)"
-            assert sheet["H6"].value == "Valor líquido (vLiq)"
+            assert sheet["C6"].value == "Finalidade da NFS-e (finNFSe)"
+            assert sheet["C7"].value == "1"
+            assert sheet["D7"].value == "2"
+            assert sheet["E7"].value == "3"
+            assert sheet["G6"].value == "IRRF retido (vRetIRRF)"
+            assert sheet["K6"].value == "Valor IBS (vIBSTot)"
+            assert sheet["K7"].value == 7.7
+            assert sheet["L7"].value == 8.8
+            assert sheet["M7"].value == 4.4
+            assert sheet["N7"].value == 5.5
+            assert sheet["O6"].value == "Valor líquido (vLiq)"
         assert count == 2
     finally:
         zip_path.unlink(missing_ok=True)

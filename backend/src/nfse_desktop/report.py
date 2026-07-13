@@ -21,11 +21,18 @@ MONEY_FORMAT = 'R$ #,##0.00;[Red]-R$ #,##0.00'
 class ReportRow:
     numero: str
     situacao: str
+    finalidade_nfse: str
+    tipo_debito: str
+    tipo_credito: str
     valor_total: Decimal | None
     irrf_retido: Decimal | None
     csll_retida: Decimal | None
     issqn_retido: Decimal | None
     contribuicao_previdenciaria_retida: Decimal | None
+    valor_ibs: Decimal | None
+    valor_cbs: Decimal | None
+    ajuste_ibs: Decimal | None
+    ajuste_cbs: Decimal | None
     valor_liquido: Decimal | None
 
 
@@ -52,11 +59,18 @@ def generate_nfse_report_xlsx(
     headers = [
         "Número da NFS-e",
         "Situação",
+        "Finalidade da NFS-e (finNFSe)",
+        "Tipo de débito (tpNFSeDebito)",
+        "Tipo de crédito (tpNFSeCredito)",
         "Valor total da nota",
         "IRRF retido (vRetIRRF)",
         "CSLL retida (vRetCSLL)",
         "ISSQN retido",
         "Contribuição previdenciária retida (vRetCP)",
+        "Valor IBS (vIBSTot)",
+        "Valor CBS (vCBS)",
+        "Ajuste IBS (gIBSCBSAjuste/vIBS)",
+        "Ajuste CBS (gIBSCBSAjuste/vCBS)",
         "Valor líquido (vLiq)",
     ]
     last_column = get_column_letter(len(headers))
@@ -108,21 +122,28 @@ def generate_nfse_report_xlsx(
         values = [
             item.numero,
             item.situacao,
+            item.finalidade_nfse,
+            item.tipo_debito,
+            item.tipo_credito,
             _excel_number(item.valor_total),
             _excel_number(item.irrf_retido),
             _excel_number(item.csll_retida),
             _excel_number(item.issqn_retido),
             _excel_number(item.contribuicao_previdenciaria_retida),
+            _excel_number(item.valor_ibs),
+            _excel_number(item.valor_cbs),
+            _excel_number(item.ajuste_ibs),
+            _excel_number(item.ajuste_cbs),
             _excel_number(item.valor_liquido),
         ]
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row=row_index, column=column, value=value)
             cell.font = Font(name="Arial", size=10, color="111827")
             cell.alignment = Alignment(
-                horizontal="left" if column <= 2 else "right",
+                horizontal="left" if column <= 5 else "right",
                 vertical="center",
             )
-            if column > 2:
+            if column > 5:
                 cell.number_format = MONEY_FORMAT
         if (row_index - first_data_row) % 2:
             for cell in sheet[row_index]:
@@ -155,7 +176,7 @@ def generate_nfse_report_xlsx(
 
     total_row = last_data_row + 2
     sheet.cell(row=total_row, column=1, value="TOTAIS")
-    for column in range(3, len(headers) + 1):
+    for column in range(6, len(headers) + 1):
         column_letter = get_column_letter(column)
         formula = f"=SUM({column_letter}{first_data_row}:{column_letter}{last_data_row})"
         sheet.cell(row=total_row, column=column, value=formula)
@@ -172,7 +193,7 @@ def generate_nfse_report_xlsx(
         )
     sheet.row_dimensions[total_row].height = 22
 
-    widths = [22, 16, 20, 23, 23, 18, 43, 20]
+    widths = [22, 16, 28, 28, 28, 20, 23, 23, 18, 43, 20, 20, 28, 28, 20]
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
 
@@ -196,11 +217,18 @@ def _report_row(document: dict[str, object]) -> ReportRow:
         return ReportRow(
             numero=str(document.get("access_key") or "-"),
             situacao=_document_status(document),
+            finalidade_nfse="",
+            tipo_debito="",
+            tipo_credito="",
             valor_total=_decimal_or_none(document.get("service_amount")),
             irrf_retido=None,
             csll_retida=None,
             issqn_retido=None,
             contribuicao_previdenciaria_retida=None,
+            valor_ibs=None,
+            valor_cbs=None,
+            ajuste_ibs=None,
+            ajuste_cbs=None,
             valor_liquido=_decimal_or_none(document.get("net_amount")),
         )
 
@@ -210,25 +238,42 @@ def _report_row(document: dict[str, object]) -> ReportRow:
         return ReportRow(
             numero=str(document.get("access_key") or "-"),
             situacao=_document_status(document),
+            finalidade_nfse="",
+            tipo_debito="",
+            tipo_credito="",
             valor_total=_decimal_or_none(document.get("service_amount")),
             irrf_retido=None,
             csll_retida=None,
             issqn_retido=None,
             contribuicao_previdenciaria_retida=None,
+            valor_ibs=None,
+            valor_cbs=None,
+            ajuste_ibs=None,
+            ajuste_cbs=None,
             valor_liquido=_decimal_or_none(document.get("net_amount")),
         )
 
     inf_nfse = root.find("n:infNFSe", NAMESPACE)
     if inf_nfse is None and root.tag.endswith("infNFSe"):
         inf_nfse = root
-    dps_values = inf_nfse.find("n:DPS/n:infDPS/n:valores", NAMESPACE) if inf_nfse is not None else None
+    inf_dps = inf_nfse.find("n:DPS/n:infDPS", NAMESPACE) if inf_nfse is not None else None
+    dps_values = inf_dps.find("n:valores", NAMESPACE) if inf_dps is not None else None
     nfse_values = inf_nfse.find("n:valores", NAMESPACE) if inf_nfse is not None else None
+    ibscbs_dps = inf_dps.find("n:IBSCBS", NAMESPACE) if inf_dps is not None else None
+    ibscbs_nfse = inf_nfse.find("n:IBSCBS", NAMESPACE) if inf_nfse is not None else None
+    total_cibs = _find(ibscbs_nfse, "totCIBS")
+    total_ibs = _find(total_cibs, "gIBS")
+    total_cbs = _find(total_cibs, "gCBS")
+    adjustment = _find(ibscbs_dps, "valores/trib/gIBSCBSAjuste")
     retention_type = _text(dps_values, "trib/tribMun/tpRetISSQN")
     issqn = _decimal(_text(nfse_values, "vISSQN")) if retention_type == "2" else Decimal("0")
 
     return ReportRow(
         numero=_text(inf_nfse, "nNFSe") or str(document.get("access_key") or "-"),
         situacao=_document_status(document),
+        finalidade_nfse=_text(inf_dps, "finNFSe") or _text(ibscbs_dps, "finNFSe"),
+        tipo_debito=_text(inf_dps, "tpNFSeDebito"),
+        tipo_credito=_text(inf_dps, "tpNFSeCredito"),
         valor_total=_decimal(_text(dps_values, "vServPrest/vServ"))
         or _decimal_or_none(document.get("service_amount")),
         irrf_retido=_decimal(_text(dps_values, "trib/tribFed/vRetIRRF")),
@@ -237,6 +282,10 @@ def _report_row(document: dict[str, object]) -> ReportRow:
         contribuicao_previdenciaria_retida=_decimal(
             _text(dps_values, "trib/tribFed/vRetCP")
         ),
+        valor_ibs=_decimal(_text(total_ibs, "vIBSTot")),
+        valor_cbs=_decimal(_text(total_cbs, "vCBS")),
+        ajuste_ibs=_decimal(_text(adjustment, "vIBS")),
+        ajuste_cbs=_decimal(_text(adjustment, "vCBS")),
         valor_liquido=_decimal(_text(nfse_values, "vLiq"))
         or _decimal_or_none(document.get("net_amount")),
     )
@@ -249,8 +298,14 @@ def _document_status(document: dict[str, object]) -> str:
 def _text(node: ET.Element | None, path: str) -> str:
     if node is None:
         return ""
-    found = node.find(f"n:{path.replace('/', '/n:')}", NAMESPACE)
+    found = _find(node, path)
     return (found.text or "").strip() if found is not None else ""
+
+
+def _find(node: ET.Element | None, path: str) -> ET.Element | None:
+    if node is None:
+        return None
+    return node.find(f"n:{path.replace('/', '/n:')}", NAMESPACE)
 
 
 def _decimal(value: str) -> Decimal:
