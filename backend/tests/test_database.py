@@ -29,6 +29,17 @@ def test_company_round_trip(tmp_path) -> None:
     settings = repository.get_settings()
     assert settings["notes_directory"] == str(tmp_path / "Notas")
     assert settings["notifications_enabled"] is True
+    assert settings["environment"] == "producao"
+
+    repository.update_settings(
+        str(tmp_path / "Notas Restritas"),
+        notifications_enabled=False,
+        environment="producao_restrita",
+    )
+    updated_settings = repository.get_settings()
+    assert updated_settings["notes_directory"] == str(tmp_path / "Notas Restritas")
+    assert updated_settings["notifications_enabled"] is False
+    assert updated_settings["environment"] == "producao_restrita"
 
     documents = repository.list_documents("12345678000190")
     assert documents["items"] == []

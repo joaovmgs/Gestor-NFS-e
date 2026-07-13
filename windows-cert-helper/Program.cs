@@ -10,7 +10,7 @@ Console.OutputEncoding = new UTF8Encoding(false);
 
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("Uso: Nfse.WindowsCertificates list | fetch <thumbprint> <nsu> [cnpjConsulta]");
+    Console.Error.WriteLine("Uso: Nfse.WindowsCertificates list | fetch <thumbprint> <nsu> [cnpjConsulta] [ambiente]");
     return 2;
 }
 
@@ -20,7 +20,7 @@ if (string.Equals(args[0], "list", StringComparison.OrdinalIgnoreCase))
     return 0;
 }
 
-if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.Length is 3 or 4)
+if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.Length is >= 3 and <= 5)
 {
     var certificate = FindCertificate(args[1]);
     if (certificate is null)
@@ -34,10 +34,16 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
         Console.Error.WriteLine("NSU invalido.");
         return 4;
     }
-    var cnpjConsulta = args.Length == 4 ? OnlyDigits(args[3]) : string.Empty;
+    var cnpjConsulta = args.Length >= 4 ? OnlyDigits(args[3]) : string.Empty;
+    var ambiente = args.Length == 5 ? args[4] : "producao";
     if (!string.IsNullOrEmpty(cnpjConsulta) && cnpjConsulta.Length != 14)
     {
         Console.Error.WriteLine("CNPJ de consulta invalido.");
+        return 4;
+    }
+    if (ambiente is not "producao" and not "producao_restrita")
+    {
+        Console.Error.WriteLine("Ambiente invalido.");
         return 4;
     }
 
@@ -54,8 +60,11 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
             var query = string.IsNullOrEmpty(cnpjConsulta)
                 ? "lote=true"
                 : $"lote=true&cnpjConsulta={WebUtility.UrlEncode(cnpjConsulta)}";
+            var adnBaseUrl = ambiente == "producao_restrita"
+                ? "https://adn.producaorestrita.nfse.gov.br/contribuintes"
+                : "https://adn.nfse.gov.br/contribuintes";
             using var response = await client.GetAsync(
-                $"https://adn.nfse.gov.br/contribuintes/DFe/{nsu}?{query}"
+                $"{adnBaseUrl}/DFe/{nsu}?{query}"
             );
             var body = await response.Content.ReadAsStringAsync();
             if (string.IsNullOrWhiteSpace(body))

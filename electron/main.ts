@@ -76,6 +76,11 @@ interface CompanyRecord {
   last_nsu: number;
 }
 
+interface AppSettings {
+  notifications_enabled: boolean;
+  environment: "producao" | "producao_restrita";
+}
+
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -281,7 +286,7 @@ async function showSyncNotification(companyName: string, downloaded: number): Pr
 }
 
 async function showDesktopNotification(title: string, body: string): Promise<void> {
-  const settings = await api<{ notifications_enabled: boolean }>("/settings");
+  const settings = await api<AppSettings>("/settings");
   if (!settings.notifications_enabled || !Notification.isSupported()) return;
   new Notification({
     title,
@@ -341,6 +346,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
   let downloaded = 0;
   let networkAttempt = 0;
   const retryDelays = [15, 30, 60, 120, 300];
+  const settings = await api<AppSettings>("/settings");
 
   while (true) {
     if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
@@ -348,7 +354,13 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
     try {
       const result = await execFileAsync(
         windowsHelperPath(),
-        ["fetch", company.certificate_reference, String(requestedNsu), company.cnpj],
+        [
+          "fetch",
+          company.certificate_reference,
+          String(requestedNsu),
+          company.cnpj,
+          settings.environment
+        ],
         {
           windowsHide: true,
           maxBuffer: 50 * 1024 * 1024,

@@ -50,6 +50,7 @@ export interface SyncLog {
 export interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
+  environment: "producao" | "producao_restrita";
 }
 
 export interface ExportQueueStatus {
