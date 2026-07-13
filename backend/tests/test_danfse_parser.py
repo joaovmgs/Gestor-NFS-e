@@ -1,7 +1,7 @@
-from danfse_nt008 import parse_provider
+from danfse_brasil import parse_danfse, parse_provider, validate_danfse_data
 
 
-def test_provider_name_falls_back_to_nfse_issuer(tmp_path) -> None:
+def test_provider_name_uses_normative_prest_path(tmp_path) -> None:
     xml_path = tmp_path / "nfse.xml"
     xml_path.write_text(
         """
@@ -22,4 +22,11 @@ def test_provider_name_falls_back_to_nfse_issuer(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    assert parse_provider(xml_path).name == "Prestador no emitente"
+    assert parse_provider(xml_path).name == "-"
+    issues = validate_danfse_data(parse_danfse(xml_path))
+    assert any(
+        issue.code == "data.required_missing"
+        and issue.severity == "warning"
+        and "DPS/infDPS/prest/xNome" in issue.message
+        for issue in issues
+    )
