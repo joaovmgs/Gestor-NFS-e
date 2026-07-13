@@ -60,9 +60,6 @@ const syncStatusLabel = (status: string) => {
   return labels[status] ?? status;
 };
 
-const environmentLabel = (environment?: AppSettings["environment"]) =>
-  environment === "producao_restrita" ? "Produção restrita" : "Produção";
-
 const currentMonthRange = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -549,7 +546,6 @@ export function App() {
                   <RefreshCw className={selectedSyncActive ? "spinning" : ""} size={16} /> {selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
                 </button>
               </div>
-              <div><span>Ambiente</span><strong>{environmentLabel(settings.environment)}</strong></div>
             </section>
             <section className={`sync-log-panel ${showSyncLogs ? "open" : ""}`}>
               <button className="sync-log-toggle" onClick={() => setShowSyncLogs((current) => !current)}>
