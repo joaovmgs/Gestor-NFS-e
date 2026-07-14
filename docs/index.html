@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestor NFS-e | Baixar XML, DANFSe PDF e relatório XLSX</title>
+    <meta
+      name="description"
+      content="Gestor NFS-e é um aplicativo desktop para Windows que consulta NFS-e Nacional, organiza notas emitidas e recebidas, baixa XML, gera DANFSe em PDF e exporta relatório XLSX."
+    >
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://joaovmgs.github.io/Gestor-NFS-e/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Gestor NFS-e">
+    <meta
+      property="og:description"
+      content="Aplicativo Windows para consultar NFS-e Nacional, baixar XML, gerar DANFSe PDF e exportar relatório XLSX."
+    >
+    <meta property="og:url" content="https://joaovmgs.github.io/Gestor-NFS-e/">
+    <meta property="og:image" content="https://joaovmgs.github.io/Gestor-NFS-e/assets/icon.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="icon" href="assets/icon.png">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f9fb;
+        --surface: #ffffff;
+        --text: #172126;
+        --muted: #53646d;
+        --line: #dce5e9;
+        --accent: #0f766e;
+        --accent-dark: #0b5e59;
+        --soft: #e8f4f2;
+        --warning: #7a4b00;
+        --warning-bg: #fff5dc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--accent-dark);
+      }
+
+      .page {
+        min-height: 100vh;
+      }
+
+      .hero {
+        background: linear-gradient(180deg, #ffffff 0%, #edf6f4 100%);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .container {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 22px 0;
+        gap: 20px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 18px;
+      }
+
+      .brand img {
+        width: 42px;
+        height: 42px;
+      }
+
+      .nav {
+        display: flex;
+        gap: 18px;
+        font-size: 14px;
+      }
+
+      .nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 54px;
+        align-items: center;
+        padding: 58px 0 72px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      h1 {
+        margin: 18px 0 18px;
+        max-width: 760px;
+        font-size: clamp(38px, 6vw, 68px);
+        line-height: 1.03;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 690px;
+        color: var(--muted);
+        font-size: 20px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 30px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+      }
+
+      .button.primary:hover {
+        background: var(--accent-dark);
+      }
+
+      .hero-panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 28px;
+        box-shadow: 0 18px 45px rgba(18, 39, 48, 0.08);
+      }
+
+      .app-preview {
+        display: grid;
+        gap: 16px;
+      }
+
+      .preview-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .preview-head img {
+        width: 74px;
+        height: 74px;
+      }
+
+      .preview-title {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.2;
+      }
+
+      .preview-subtitle {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfcfd;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 20px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      main {
+        padding: 66px 0;
+      }
+
+      .section {
+        margin-bottom: 64px;
+      }
+
+      .section h2 {
+        margin: 0 0 12px;
+        font-size: 32px;
+        letter-spacing: 0;
+      }
+
+      .section-intro {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 24px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+
+      .card h3 {
+        margin: 0 0 10px;
+        font-size: 19px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .steps {
+        display: grid;
+        gap: 12px;
+        margin-top: 24px;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+
+      .steps li {
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        gap: 14px;
+        align-items: start;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        counter-increment: step;
+      }
+
+      .steps li::before {
+        content: counter(step);
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--accent-dark);
+        font-weight: 800;
+      }
+
+      .notice {
+        border: 1px solid #f1d48a;
+        border-radius: 8px;
+        background: var(--warning-bg);
+        color: var(--warning);
+        padding: 18px;
+      }
+
+      .download-band {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .download-band h2 {
+        margin: 0 0 8px;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 28px 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 860px) {
+        .topbar,
+        .download-band {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .nav {
+          flex-wrap: wrap;
+        }
+
+        .hero-grid,
+        .cards {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-grid {
+          padding: 34px 0 52px;
+          gap: 28px;
+        }
+      }
+    </style>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Gestor NFS-e",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Windows 10, Windows 11",
+        "description": "Aplicativo desktop para consultar NFS-e Nacional, organizar notas emitidas e recebidas, baixar XML, gerar DANFSe em PDF e exportar relatório XLSX.",
+        "downloadUrl": "https://github.com/joaovmgs/Gestor-NFS-e/releases",
+        "softwareVersion": "0.1.5",
+        "license": "https://github.com/joaovmgs/Gestor-NFS-e/blob/main/LICENSE",
+        "author": {
+          "@type": "Person",
+          "name": "joaovmgs"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="container">
+          <div class="topbar">
+            <a class="brand" href="https://github.com/joaovmgs/Gestor-NFS-e">
+              <img src="assets/icon.png" alt="">
+              <span>Gestor NFS-e</span>
+            </a>
+            <nav class="nav" aria-label="Navegação principal">
+              <a href="#recursos">Recursos</a>
+              <a href="#download">Download</a>
+              <a href="#seguranca">Segurança</a>
+              <a href="https://github.com/joaovmgs/Gestor-NFS-e">GitHub</a>
+            </nav>
+          </div>
+
+          <div class="hero-grid">
+            <div>
+              <span class="eyebrow">Aplicativo desktop para Windows</span>
+              <h1>Baixe XML, gere DANFSe em PDF e organize NFS-e Nacional.</h1>
+              <p class="lead">
+                O Gestor NFS-e ajuda contadores e empresas a consultar notas emitidas e recebidas,
+                acompanhar eventos, separar documentos cancelados e exportar relatórios XLSX de
+                retenções sem depender de um painel externo.
+              </p>
+              <div class="actions">
+                <a class="button primary" href="https://github.com/joaovmgs/Gestor-NFS-e/releases">
+                  Baixar instalador
+                </a>
+                <a class="button" href="https://github.com/joaovmgs/Gestor-NFS-e">
+                  Ver código no GitHub
+                </a>
+              </div>
+            </div>
+
+            <aside class="hero-panel" aria-label="Resumo do aplicativo">
+              <div class="app-preview">
+                <div class="preview-head">
+                  <img src="assets/icon.png" alt="">
+                  <div>
+                    <h2 class="preview-title">Gestor NFS-e</h2>
+                    <p class="preview-subtitle">Consulta local para documentos fiscais de serviço.</p>
+                  </div>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric">
+                    <strong>XML</strong>
+                    <span>Notas emitidas e recebidas</span>
+                  </div>
+                  <div class="metric">
+                    <strong>PDF</strong>
+                    <span>DANFSe para conferência</span>
+                  </div>
+                  <div class="metric">
+                    <strong>XLSX</strong>
+                    <span>Relatório de retenções</span>
+                  </div>
+                  <div class="metric">
+                    <strong>Local</strong>
+                    <span>Dados no computador</span>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="section" id="recursos">
+          <div class="container">
+            <h2>Feito para a rotina de NFS-e</h2>
+            <p class="section-intro">
+              A ideia do Gestor NFS-e é reduzir trabalho manual na conferência de notas de serviço.
+              O aplicativo consulta a NFS-e Nacional por certificado digital, salva o histórico local
+              e permite baixar tudo em um ZIP organizado por XML, PDF e documentos cancelados.
+            </p>
+            <div class="cards">
+              <article class="card">
+                <h3>Consulta por empresa</h3>
+                <p>
+                  Cadastre empresas com certificado A1 ou certificado instalado no Windows e consulte
+                  documentos emitidos e recebidos por período.
+                </p>
+              </article>
+              <article class="card">
+                <h3>Download organizado</h3>
+                <p>
+                  Gere um ZIP com XML, DANFSe em PDF e planilha XLSX. Notas canceladas são separadas
+                  para facilitar revisão e arquivamento.
+                </p>
+              </article>
+              <article class="card">
+                <h3>Relatório de retenções</h3>
+                <p>
+                  Exporte valores como IRRF, CSLL, ISSQN, contribuição previdenciária, valor total e
+                  valor líquido para análise em planilha.
+                </p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="download">
+          <div class="container">
+            <div class="download-band">
+              <div>
+                <h2>Baixar o Gestor NFS-e</h2>
+                <p class="section-intro">
+                  Acesse a página de releases do GitHub e baixe o instalador mais recente para Windows.
+                </p>
+              </div>
+              <a class="button primary" href="https://github.com/joaovmgs/Gestor-NFS-e/releases">
+                Ver releases
+              </a>
+            </div>
+            <ol class="steps">
+              <li>Baixe o arquivo <strong>Gestor-NFSe-Setup</strong> da versão mais recente.</li>
+              <li>Instale o aplicativo no Windows e abra o Gestor NFS-e.</li>
+              <li>Cadastre uma empresa, selecione o certificado digital e defina o período de consulta.</li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="section" id="seguranca">
+          <div class="container">
+            <h2>Dados locais e controle do usuário</h2>
+            <p class="section-intro">
+              O aplicativo foi pensado para rodar no computador do usuário. O banco de dados, as
+              configurações e os documentos baixados ficam localmente. Ao cadastrar uma empresa, o
+              usuário decide se quer armazenar o certificado e a senha para consultas futuras.
+            </p>
+            <div class="cards">
+              <article class="card">
+                <h3>Sem login</h3>
+                <p>Não há painel web, conta de usuário ou servidor próprio recebendo documentos fiscais.</p>
+              </article>
+              <article class="card">
+                <h3>Certificado digital</h3>
+                <p>O certificado autentica a consulta aos serviços nacionais da NFS-e conforme permissão do contribuinte.</p>
+              </article>
+              <article class="card">
+                <h3>Histórico no PC</h3>
+                <p>As notas já sincronizadas continuam disponíveis para busca, filtro e exportação.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="container">
+            <div class="notice">
+              O Gestor NFS-e é um projeto independente. Ele não é um sistema oficial do Governo Federal,
+              do Portal Nacional da NFS-e ou de qualquer órgão público. Antes de usar em processos
+              críticos, valide os documentos e relatórios conforme a rotina fiscal da sua empresa.
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="container">
+          Gestor NFS-e - projeto open source para consulta e organização de NFS-e Nacional.
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
