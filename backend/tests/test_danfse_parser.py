@@ -1,4 +1,5 @@
 from danfse_brasil import parse_danfse, parse_provider, validate_danfse_data
+from danfse_brasil.xml import parse_header
 
 
 def test_provider_name_uses_normative_prest_path(tmp_path) -> None:
@@ -30,3 +31,26 @@ def test_provider_name_uses_normative_prest_path(tmp_path) -> None:
         and "DPS/infDPS/prest/xNome" in issue.message
         for issue in issues
     )
+
+
+def test_maps_nfse_substitution_status(tmp_path) -> None:
+    xml_path = tmp_path / "nfse-substituicao.xml"
+    xml_path.write_text(
+        """
+        <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">
+          <infNFSe Id="NFS123">
+            <cStat>101</cStat>
+            <DPS>
+              <infDPS>
+                <prest>
+                  <CNPJ>12345678000190</CNPJ>
+                </prest>
+              </infDPS>
+            </DPS>
+          </infNFSe>
+        </NFSe>
+        """,
+        encoding="utf-8",
+    )
+
+    assert parse_header(xml_path).status == "NFS-e de Substituição Gerada"
