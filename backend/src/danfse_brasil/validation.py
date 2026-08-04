@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import layout
-from .models import DanfseData, MISSING_VALUE
+from .models import MISSING_VALUE, DanfseData
 
 
 @dataclass(frozen=True)

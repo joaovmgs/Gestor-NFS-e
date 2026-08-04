@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from .models import MISSING_VALUE
 
-
 # Source:
 # https://servicodados.ibge.gov.br/api/v1/localidades/municipios
 IBGE_MUNICIPALITIES = {

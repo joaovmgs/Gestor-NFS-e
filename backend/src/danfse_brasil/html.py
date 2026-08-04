@@ -8,6 +8,7 @@ from io import BytesIO
 
 from . import layout
 from .models import (
+    NFSE_LOGO_URL,
     ComplementaryInfoData,
     CustomerData,
     DanfseData,
@@ -17,7 +18,6 @@ from .models import (
     IbsCbsTaxationData,
     IntermediaryData,
     MunicipalTaxationData,
-    NFSE_LOGO_URL,
     ProviderData,
     ReceiptData,
     ServiceData,

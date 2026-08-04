@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import re
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -20,7 +20,7 @@ class CertificateInfo:
 
 
 def validate_certificate_period(not_before: datetime, not_after: datetime) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = _as_utc(not_before)
     end = _as_utc(not_after)
     if start > now:
@@ -34,7 +34,7 @@ def validate_certificate_expiration(expires_at: str) -> None:
         expiration = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("Data de validade do certificado invalida.") from exc
-    validate_certificate_period(datetime.min.replace(tzinfo=timezone.utc), expiration)
+    validate_certificate_period(datetime.min.replace(tzinfo=UTC), expiration)
 
 
 def normalize_cnpj(value: str) -> str:
@@ -76,7 +76,7 @@ def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
 
     common_names = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     legal_name = common_names[0].value if common_names else cnpj
-    expires_at = certificate.not_valid_after_utc.astimezone(timezone.utc).isoformat()
+    expires_at = certificate.not_valid_after_utc.astimezone(UTC).isoformat()
     return CertificateInfo(
         cnpj=cnpj,
         legal_name=legal_name,
@@ -87,8 +87,8 @@ def inspect_pfx(content: bytes, password: str) -> CertificateInfo:
 
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _cnpj_from_certificate(certificate: x509.Certificate) -> str:

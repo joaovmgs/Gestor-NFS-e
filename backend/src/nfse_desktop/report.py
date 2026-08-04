@@ -12,7 +12,6 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
-
 NAMESPACE = {"n": "http://www.sped.fazenda.gov.br/nfse"}
 MONEY_FORMAT = 'R$ #,##0.00;[Red]-R$ #,##0.00'
 

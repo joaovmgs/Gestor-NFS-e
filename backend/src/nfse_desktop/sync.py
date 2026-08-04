@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-from types import SimpleNamespace
 import tempfile
+from pathlib import Path
 from time import sleep
+from types import SimpleNamespace
 
 import httpx
+
 from gov_nfse import Ambiente, NfseClient, summarize_nfse_xml
 from gov_nfse.encoding import gzip_base64_decode_text
 from gov_nfse.errors import ServerError, TooManyRequestsError

@@ -1,5 +1,5 @@
-from nfse_desktop.database import Database
 from nfse_desktop.api import _save_company_variants
+from nfse_desktop.database import Database
 from nfse_desktop.repository import Repository
 from nfse_desktop.sync import SyncService
 

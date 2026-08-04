@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-import sqlite3
-from typing import Iterator
 from xml.etree import ElementTree as ET
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS companies (

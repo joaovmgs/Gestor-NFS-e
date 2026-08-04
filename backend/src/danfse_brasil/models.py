@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 MISSING_VALUE = "-"
 CONSULTA_PUBLICA_URL = "https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave="
 NFSE_LOGO_URL = (

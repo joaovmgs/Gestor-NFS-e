@@ -39,6 +39,7 @@ from .formatting import (
     strip_nfse_prefix,
 )
 from .models import (
+    MISSING_VALUE,
     ComplementaryInfoData,
     CustomerData,
     DanfseData,
@@ -47,7 +48,6 @@ from .models import (
     HeaderData,
     IbsCbsTaxationData,
     IntermediaryData,
-    MISSING_VALUE,
     MunicipalTaxationData,
     ProviderData,
     ReceiptData,

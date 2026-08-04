@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 
 @dataclass(frozen=True)
@@ -12,7 +12,7 @@ class Settings:
     api_token: str
 
     @classmethod
-    def from_environment(cls) -> "Settings":
+    def from_environment(cls) -> Settings:
         data_dir = Path(os.environ.get("NFSE_DATA_DIR", "data")).resolve()
         return cls(
             data_dir=data_dir,
