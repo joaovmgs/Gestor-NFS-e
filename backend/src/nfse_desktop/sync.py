@@ -43,7 +43,7 @@ class SyncService:
                 with NfseClient(
                     certificado_pfx=certificate_path,
                     senha=password,
-                    ambiente=self._current_environment(),
+                    ambiente=Ambiente.PRODUCAO,
                     timeout=90,
                 ) as client:
                     transient_attempt = 0
@@ -250,14 +250,6 @@ class SyncService:
                 **item,
             }
         )
-
-    def _current_environment(self) -> Ambiente:
-        value = str(self.repository.get_settings().get("environment") or Ambiente.PRODUCAO)
-        try:
-            return Ambiente(value)
-        except ValueError:
-            return Ambiente.PRODUCAO
-
 
 def _diagnostic(requested_nsu: int, result: object) -> str:
     status = str(getattr(result, "status", "DESCONHECIDO"))

@@ -31,13 +31,7 @@ contextBridge.exposeInMainWorld("nfse", {
   deleteCompany: (cnpj: string) => invokeClean("companies:delete", cnpj),
   listDocuments: (input: DocumentQuery) => invokeClean("documents:list", input),
   downloadDocuments: (input: DownloadQuery) =>
-    invokeClean(
-      "documents:download",
-      input.cnpj,
-      input.startDate,
-      input.endDate,
-      input.direction
-    ),
+    invokeClean("documents:download", input),
   getExportQueueStatus: () => invokeClean("exports:status"),
   onExportQueueStatus: (callback: (status: ExportQueueStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: ExportQueueStatus) =>
@@ -87,6 +81,11 @@ interface DownloadQuery {
   startDate: string;
   endDate: string;
   direction: "emitida" | "recebida";
+  search?: string;
+  status?: "todas" | "autorizada" | "cancelada";
+  includeXml: boolean;
+  includePdf: boolean;
+  includeXlsx: boolean;
 }
 
 interface ExportQueueStatus {
@@ -99,5 +98,4 @@ interface ExportQueueStatus {
 interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
-  environment: "producao" | "producao_restrita";
 }

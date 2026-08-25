@@ -23,12 +23,13 @@ import type {
   Company,
   CompanyRegistrationResult,
   Document,
+  DownloadOptions,
   ExportQueueStatus,
   SyncLog,
   WindowsCertificate
 } from "./types";
 
-type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "delete-company" | null;
+type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "download" | "delete-company" | null;
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
@@ -98,6 +99,11 @@ export function App() {
   const [companySearch, setCompanySearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadOptions, setDownloadOptions] = useState<DownloadOptions>({
+    includeXml: true,
+    includePdf: true,
+    includeXlsx: true
+  });
   const [exportQueue, setExportQueue] = useState<ExportQueueStatus>({
     processing: false,
     pending: 0,
@@ -112,8 +118,7 @@ export function App() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
     notes_directory: "",
-    notifications_enabled: true,
-    environment: "producao"
+    notifications_enabled: true
   });
   const [message, setMessage] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -407,6 +412,10 @@ export function App() {
 
   async function downloadDocuments() {
     if (!selected) return;
+    if (!Object.values(downloadOptions).some(Boolean)) {
+      setMessage("Selecione ao menos um formato para o download.");
+      return;
+    }
     setMessage("");
     setDownloading(true);
     try {
@@ -414,9 +423,13 @@ export function App() {
         cnpj: selected.cnpj,
         startDate,
         endDate,
-        direction
+        direction,
+        search: search.trim() || undefined,
+        status: documentStatus,
+        ...downloadOptions
       });
       if (queuedExport) {
+        setDialog(null);
         setMessage(
           queuedExport.position === 1
             ? "Exportação iniciada. Você pode continuar usando o aplicativo."
@@ -437,6 +450,7 @@ export function App() {
     ? exportQueue.pendingIds.filter((cnpj) => cnpj === selected.cnpj).length
     : 0;
   const selectedSyncActive = Boolean(selected && syncQueue.activeId === selected.cnpj);
+  const selectedSyncPaused = Boolean(selectedSyncActive && selected?.sync_status === "waiting");
   const selectedSyncPending = selected
     ? syncQueue.pendingIds.filter((cnpj) => cnpj === selected.cnpj).length
     : 0;
@@ -543,7 +557,7 @@ export function App() {
                 <span className={`status-dot ${selected.sync_status}`} />
                 <span>{syncStatusLabel(selected.sync_status)}</span>
                 <button className="button sync" disabled={selectedSyncActive || selectedSyncPending > 0} onClick={() => selected.remember_certificate ? syncCompany() : setDialog("sync")}>
-                  <RefreshCw className={selectedSyncActive ? "spinning" : ""} size={16} /> {selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
+                  <RefreshCw className={selectedSyncActive && !selectedSyncPaused ? "spinning" : ""} size={16} /> {selectedSyncPaused ? "Em pausa" : selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
                 </button>
               </div>
             </section>
@@ -568,6 +582,24 @@ export function App() {
                 </div>
               )}
             </section>
+            {(selected.sync_status === "waiting" || selected.sync_status === "error") && (
+              <div className={`sync-alert ${selected.sync_status}`} role="alert">
+                <strong>
+                  {selected.sync_status === "waiting"
+                    ? "Consulta pausada temporariamente"
+                    : "A sincronização foi interrompida"}
+                </strong>
+                <span>
+                  {selected.diagnostic ||
+                    (selected.sync_status === "waiting"
+                      ? "O aplicativo tentará novamente automaticamente."
+                      : "Use o botão Sincronizar para tentar novamente.")}
+                </span>
+                {selected.sync_status === "waiting" && (
+                  <small>Não é necessário fechar o aplicativo. A fila será retomada automaticamente.</small>
+                )}
+              </div>
+            )}
 
             <section className="documents">
               <div className="documents-heading">
@@ -600,8 +632,8 @@ export function App() {
                 </label>
                 <div className="filter-actions">
                   <button className="button secondary filter-button" onClick={() => loadDocuments(selected.cnpj, 1)}>Aplicar filtros</button>
-                  <button className="button primary filter-button" disabled={downloading} onClick={downloadDocuments}>
-                    <Download size={16} /> {downloading ? "Gerando ZIP" : "Baixar ZIP"}
+                  <button className="button primary filter-button" disabled={downloading} onClick={() => setDialog("download")}>
+                    <Download size={16} /> {downloading ? "Preparando" : "Download"}
                   </button>
                 </div>
               </div>
@@ -612,7 +644,7 @@ export function App() {
                     {downloading
                       ? "Preparando a exportação..."
                       : selectedExportActive
-                        ? "Gerando ZIP desta empresa com os arquivos XML e PDF."
+                        ? "Gerando o pacote de download com os formatos selecionados."
                         : `${selectedExportPending} exportação(ões) desta empresa aguardando na fila.`}
                   </span>
                 </div>
@@ -760,6 +792,84 @@ export function App() {
         </div>
       )}
 
+      {dialog === "download" && selected && (
+        <div className="drawer-backdrop" role="presentation" onMouseDown={() => setDialog(null)}>
+          <aside
+            className="download-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="download-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="drawer-header">
+              <div>
+                <span className="drawer-kicker">Exportação</span>
+                <h2 id="download-title">Preparar download</h2>
+                <p>Escolha o conteúdo que será incluído no arquivo ZIP.</p>
+              </div>
+              <button className="icon-button" onClick={() => setDialog(null)} title="Fechar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="download-scope">
+              <strong>{direction === "emitida" ? "Notas emitidas" : "Notas recebidas"}</strong>
+              <span>{startDate} até {endDate}</span>
+              <span>{documentTotal} documento(s) com os filtros atuais</span>
+            </div>
+
+            <div className="download-options">
+              <label className="download-option">
+                <input
+                  type="checkbox"
+                  checked={downloadOptions.includeXml}
+                  onChange={(event) => setDownloadOptions((current) => ({ ...current, includeXml: event.target.checked }))}
+                />
+                <span><strong>Arquivos XML</strong><small>Documentos fiscais originais recebidos do Portal Nacional.</small></span>
+              </label>
+              <label className="download-option">
+                <input
+                  type="checkbox"
+                  checked={downloadOptions.includePdf}
+                  onChange={(event) => setDownloadOptions((current) => ({ ...current, includePdf: event.target.checked }))}
+                />
+                <span><strong>DANFSe em PDF</strong><small>Representação visual de cada nota. Em grandes volumes, pode levar mais tempo.</small></span>
+              </label>
+              <label className="download-option">
+                <input
+                  type="checkbox"
+                  checked={downloadOptions.includeXlsx}
+                  onChange={(event) => setDownloadOptions((current) => ({ ...current, includeXlsx: event.target.checked }))}
+                />
+                <span><strong>Relatório XLSX</strong><small>Planilha consolidada com valores, retenções e dados das notas filtradas.</small></span>
+              </label>
+            </div>
+
+            {documentTotal > 500 && downloadOptions.includePdf && (
+              <div className="drawer-warning">
+                Este período possui muitas notas. A geração dos PDFs continuará em segundo plano;
+                para um download mais rápido, selecione somente XML e/ou XLSX.
+              </div>
+            )}
+
+            {!Object.values(downloadOptions).some(Boolean) && (
+              <div className="drawer-error">Selecione ao menos um formato.</div>
+            )}
+
+            <div className="drawer-actions">
+              <button className="button secondary" onClick={() => setDialog(null)}>Cancelar</button>
+              <button
+                className="button primary"
+                disabled={downloading || !Object.values(downloadOptions).some(Boolean)}
+                onClick={downloadDocuments}
+              >
+                <Download size={16} /> {downloading ? "Preparando..." : "Gerar download"}
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
       {dialog === "settings" && (
         <div className="dialog-backdrop">
           <form className="dialog wide" onSubmit={saveSettings}>
@@ -776,14 +886,6 @@ export function App() {
               <label className="check-row settings-check">
                 <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => setSettings((current) => ({ ...current, notifications_enabled: event.target.checked }))} />
                 <span><strong>Notificações do Windows</strong><small>Avisar quando uma sincronização for concluída.</small></span>
-              </label>
-              <label className="settings-field">
-                <span>Ambiente de consulta</span>
-                <select value={settings.environment} onChange={(event) => setSettings((current) => ({ ...current, environment: event.target.value as AppSettings["environment"] }))}>
-                  <option value="producao">Produção</option>
-                  <option value="producao_restrita">Produção restrita</option>
-                </select>
-                <small>Produção restrita deve ser usada apenas para testes e diagnóstico.</small>
               </label>
               <a className="settings-repository" href={repositoryUrl} target="_blank" rel="noreferrer">
                 <Github size={20} />

@@ -152,3 +152,44 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
         assert count == 2
     finally:
         zip_path.unlink(missing_ok=True)
+
+
+def test_export_keeps_xml_when_one_pdf_fails(tmp_path, monkeypatch) -> None:
+    xml_path = tmp_path / "nota.xml"
+    xml_path.write_text("<NFSe/>", encoding="utf-8")
+
+    class FakeRepository:
+        def list_documents_for_export(self, *_args, **_kwargs):
+            return [
+                {
+                    "access_key": "CHAVE-COM-FALHA",
+                    "xml_path": str(xml_path),
+                    "status": "",
+                }
+            ]
+
+        def get_company(self, _cnpj):
+            return {"cnpj": "12345678000190", "legal_name": "Empresa Teste"}
+
+    def fail_pdf(_xml_path, _pdf_path):
+        raise ValueError("campo inesperado")
+
+    monkeypatch.setattr("nfse_desktop.exporter._render_pdf", fail_pdf)
+    zip_path, count = DocumentExporter(FakeRepository()).create_zip(
+        "12345678000190",
+        start_date="2026-08-01",
+        end_date="2026-08-31",
+        direction="emitida",
+        include_xlsx=False,
+    )
+
+    try:
+        with ZipFile(zip_path) as archive:
+            assert set(archive.namelist()) == {
+                "xml/CHAVE-COM-FALHA.xml",
+                "avisos-exportacao.txt",
+            }
+            assert "CHAVE-COM-FALHA" in archive.read("avisos-exportacao.txt").decode()
+        assert count == 1
+    finally:
+        zip_path.unlink(missing_ok=True)

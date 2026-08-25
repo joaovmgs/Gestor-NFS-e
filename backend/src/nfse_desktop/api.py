@@ -47,7 +47,6 @@ class SyncLogPayload(BaseModel):
 class SettingsPayload(BaseModel):
     notes_directory: str
     notifications_enabled: bool
-    environment: str = "producao"
 
 
 def _requested_cnpjs(primary: str | None, batch: str | None) -> list[str | None]:
@@ -166,12 +165,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         notes_directory = payload.notes_directory.strip()
         if not notes_directory:
             raise HTTPException(status_code=422, detail="Selecione uma pasta para as notas.")
-        if payload.environment not in ("producao", "producao_restrita"):
-            raise HTTPException(status_code=422, detail="Ambiente invalido.")
         return repository.update_settings(
             notes_directory,
             payload.notifications_enabled,
-            payload.environment,
         )
 
     @app.post("/companies/pfx", dependencies=[Depends(authorize)])
@@ -277,6 +273,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         data_inicial: str,
         data_final: str,
         tipo: str,
+        busca: str | None = None,
+        situacao: str | None = None,
+        incluir_xml: bool = True,
+        incluir_pdf: bool = True,
+        incluir_xlsx: bool = True,
     ):
         if tipo not in ("emitida", "recebida"):
             raise HTTPException(status_code=422, detail="Tipo de nota inválido.")
@@ -285,6 +286,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=422,
                 detail="A data inicial não pode ser posterior à data final.",
             )
+        if situacao not in (None, "todas", "autorizada", "cancelada"):
+            raise HTTPException(status_code=422, detail="Situação da nota inválida.")
+        if not any((incluir_xml, incluir_pdf, incluir_xlsx)):
+            raise HTTPException(status_code=422, detail="Selecione ao menos um formato.")
         if not repository.get_company(cnpj):
             raise HTTPException(status_code=404, detail="Empresa não encontrada.")
         try:
@@ -293,11 +298,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 start_date=data_inicial,
                 end_date=data_final,
                 direction=tipo,
+                search=busca,
+                status=None if situacao == "todas" else situacao,
+                include_xml=incluir_xml,
+                include_pdf=incluir_pdf,
+                include_xlsx=incluir_xlsx,
             )
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f"Não foi possível gerar os PDFs: {str(exc)[:300]}",
+                detail=f"Não foi possível gerar a exportação: {str(exc)[:300]}",
             ) from exc
         if count == 0:
             zip_path.unlink(missing_ok=True)

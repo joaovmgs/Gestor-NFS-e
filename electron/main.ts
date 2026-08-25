@@ -41,6 +41,8 @@ let isQuitting = false;
 const lastDocumentQueryByCompany = new Map<string, AppliedDownloadQuery>();
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 const removedCompanyCnpjs = new Set<string>();
+const syncRetryAttempts = new Map<string, number>();
+const syncRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -51,6 +53,11 @@ interface ExportJob {
   startDate: string;
   endDate: string;
   direction: NoteDirection;
+  search?: string;
+  status?: "todas" | "autorizada" | "cancelada";
+  includeXml: boolean;
+  includePdf: boolean;
+  includeXlsx: boolean;
   destination: string;
 }
 
@@ -73,12 +80,12 @@ interface CompanyRecord {
   certificate_source: "pfx" | "windows";
   certificate_cnpj?: string;
   certificate_reference?: string;
+  remember_certificate: number;
   last_nsu: number;
 }
 
 interface AppSettings {
   notifications_enabled: boolean;
-  environment: "producao" | "producao_restrita";
 }
 
 async function freePort(): Promise<number> {
@@ -306,8 +313,13 @@ async function processExportJob(job: ExportJob): Promise<void> {
   const query = new URLSearchParams({
     data_inicial: job.startDate,
     data_final: job.endDate,
-    tipo: job.direction
+    tipo: job.direction,
+    incluir_xml: String(job.includeXml),
+    incluir_pdf: String(job.includePdf),
+    incluir_xlsx: String(job.includeXlsx)
   });
+  if (job.search) query.set("busca", job.search);
+  if (job.status && job.status !== "todas") query.set("situacao", job.status);
   try {
     await downloadFile(
       `${backendUrl}/companies/${job.cnpj}/documents.zip?${query.toString()}`,
@@ -346,8 +358,6 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
   let downloaded = 0;
   let networkAttempt = 0;
   const retryDelays = [15, 30, 60, 120, 300];
-  const settings = await api<AppSettings>("/settings");
-
   while (true) {
     if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     let stdout: string;
@@ -359,7 +369,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
           company.certificate_reference,
           String(requestedNsu),
           company.cnpj,
-          settings.environment
+          "producao"
         ],
         {
           windowsHide: true,
@@ -451,10 +461,11 @@ async function synchronizePfxCompany(
 }
 
 async function synchronizeCompany(request: SyncRequest): Promise<void> {
+  let company: CompanyRecord | undefined;
   try {
     if (removedCompanyCnpjs.has(request.cnpj)) return;
     const companies = await api<CompanyRecord[]>("/companies");
-    const company = companies.find((item) => item.cnpj === request.cnpj);
+    company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
 
     const downloaded = company.certificate_source === "windows"
@@ -463,15 +474,71 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
     if (request.notify && downloaded !== null) {
       await showSyncNotification(company.legal_name, downloaded);
     }
+    syncRetryAttempts.delete(request.cnpj);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha desconhecida.";
+    const canRetryAutomatically =
+      !company || company.certificate_source === "windows" || Boolean(company.remember_certificate);
+    if (isPermanentSyncError(message) || !canRetryAutomatically) {
+      await addSyncLog(request.cnpj, "error", message).catch(() => undefined);
+      syncRetryAttempts.delete(request.cnpj);
+    } else {
+      scheduleSyncRetry(request, message);
+    }
     if (request.notify) {
       await showDesktopNotification(
-        "Sincronizacao temporariamente indisponivel",
-        `${request.cnpj}: ${message}`
+        isPermanentSyncError(message) || !canRetryAutomatically
+          ? "Sincronizacao interrompida"
+          : "Sincronizacao pausada temporariamente",
+        isPermanentSyncError(message) || !canRetryAutomatically
+          ? `${request.cnpj}: ${message}`
+          : `${request.cnpj}: o aplicativo tentara novamente automaticamente.`
       );
     }
   }
+}
+
+function isPermanentSyncError(message: string): boolean {
+  const normalized = message.toLocaleLowerCase("pt-BR");
+  return [
+    "empresa nao encontrada",
+    "empresa não encontrada",
+    "certificado nao encontrado",
+    "certificado não encontrado",
+    "certificado vencido",
+    "senha incorreta",
+    "informe a senha"
+  ].some((fragment) => normalized.includes(fragment));
+}
+
+function cancelScheduledSyncRetry(cnpj: string): void {
+  const timer = syncRetryTimers.get(cnpj);
+  if (timer) clearTimeout(timer);
+  syncRetryTimers.delete(cnpj);
+}
+
+function scheduleSyncRetry(request: SyncRequest, reason: string): void {
+  if (removedCompanyCnpjs.has(request.cnpj)) return;
+  cancelScheduledSyncRetry(request.cnpj);
+  const attempt = (syncRetryAttempts.get(request.cnpj) ?? 0) + 1;
+  syncRetryAttempts.set(request.cnpj, attempt);
+  const retryDelays = [30, 60, 120, 300];
+  const delaySeconds = retryDelays[Math.min(attempt - 1, retryDelays.length - 1)];
+  void addSyncLog(
+    request.cnpj,
+    "warning",
+    `Consulta pausada: ${reason}. Retomada automatica em ${delaySeconds}s.`
+  ).catch(() => undefined);
+  const timer = setTimeout(() => {
+    syncRetryTimers.delete(request.cnpj);
+    if (removedCompanyCnpjs.has(request.cnpj)) return;
+    const snapshot = syncQueue.snapshot();
+    if (snapshot.activeId === request.cnpj || snapshot.pendingIds.includes(request.cnpj)) {
+      return;
+    }
+    syncQueue.enqueue({ ...request, notify: false });
+  }, delaySeconds * 1000);
+  syncRetryTimers.set(request.cnpj, timer);
 }
 
 const exportQueue = new SequentialTaskQueue<ExportJob>(
@@ -489,7 +556,15 @@ function broadcastSyncQueue(snapshot: QueueSnapshot): void {
 const syncQueue = new SequentialTaskQueue<SyncRequest>(
   synchronizeCompany,
   broadcastSyncQueue,
-  (request) => request.cnpj
+  (request) => request.cnpj,
+  (error, request) => {
+    const message = error instanceof Error ? error.message : "Falha desconhecida.";
+    void addSyncLog(
+      request.cnpj,
+      "error",
+      `A fila encontrou uma falha inesperada e continuou com as demais empresas: ${message}`
+    ).catch(() => undefined);
+  }
 );
 
 function windowsHelperPath(): string {
@@ -550,6 +625,7 @@ function registerIpc(): void {
   ) => {
     const requestedCnpj =
       typeof cnpjOrInput === "string" ? cnpjOrInput : cnpjOrInput.cnpj;
+    const exportInput = typeof cnpjOrInput === "object" ? cnpjOrInput : undefined;
     const { cnpj, startDate, endDate, direction } = resolveDownloadQuery(
       cnpjOrInput,
       receivedStartDate,
@@ -557,6 +633,12 @@ function registerIpc(): void {
       receivedDirection,
       lastDocumentQueryByCompany.get(requestedCnpj)
     );
+    const includeXml = exportInput?.includeXml !== false;
+    const includePdf = exportInput?.includePdf !== false;
+    const includeXlsx = exportInput?.includeXlsx !== false;
+    if (!includeXml && !includePdf && !includeXlsx) {
+      throw new Error("Selecione ao menos um formato para exportar.");
+    }
     const filename =
       `${cnpj}-${direction}s-${startDate}-${endDate}.zip`;
     const destination = await dialog.showSaveDialog({
@@ -574,6 +656,11 @@ function registerIpc(): void {
       startDate,
       endDate,
       direction,
+      search: exportInput?.search,
+      status: exportInput?.status,
+      includeXml,
+      includePdf,
+      includeXlsx,
       destination: destination.filePath
     });
     return { filePath: destination.filePath, position };
@@ -651,6 +738,8 @@ function registerIpc(): void {
   });
   ipcMain.handle("companies:delete", async (_event, cnpj: string) => {
     removedCompanyCnpjs.add(cnpj);
+    cancelScheduledSyncRetry(cnpj);
+    syncRetryAttempts.delete(cnpj);
     syncQueue.removePendingById(cnpj);
     exportQueue.removePendingById(cnpj);
     lastDocumentQueryByCompany.delete(cnpj);
@@ -658,6 +747,7 @@ function registerIpc(): void {
     return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
   ipcMain.handle("companies:sync", (_event, input: SyncRequest) => {
+    cancelScheduledSyncRetry(input.cnpj);
     const snapshot = syncQueue.snapshot();
     if (snapshot.activeId === input.cnpj || snapshot.pendingIds.includes(input.cnpj)) {
       return { position: 0, alreadyQueued: true };

@@ -88,6 +88,12 @@ button { cursor: pointer; }
 .sync-log-entry.error span { color: #9a3829; }
 .sync-log-entry.warning span { color: #8a6515; }
 .empty-log { padding: 20px; color: #74817c; text-align: center; font-size: 11px; }
+.sync-alert { display: grid; gap: 4px; margin: 8px 30px 0; padding: 11px 13px; border-left: 3px solid; font-size: 11px; line-height: 1.45; }
+.sync-alert.waiting { border-color: #d19b25; background: #fff8e7; color: #705516; }
+.sync-alert.error { border-color: #b83f2e; background: #fff0ed; color: #733025; }
+.sync-alert strong { font-size: 12px; }
+.sync-alert span, .sync-alert small { display: block; }
+.sync-alert small { opacity: 0.82; }
 
 .documents { margin-top: 18px; }
 .documents-heading { min-height: 64px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 30px; border-bottom: 1px solid #d8dfdc; }
@@ -130,6 +136,26 @@ td.money { font-weight: 700; text-align: right; }
 .welcome p { margin: 0 0 22px; color: #68756f; font-size: 13px; }
 
 .dialog-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: rgba(18, 26, 23, 0.55); }
+.drawer-backdrop { position: fixed; inset: 0; z-index: 12; display: flex; justify-content: flex-end; background: rgba(18, 26, 23, 0.42); }
+.download-drawer { width: min(430px, 100%); height: 100%; display: flex; flex-direction: column; padding: 26px; overflow-y: auto; background: #fff; border-left: 1px solid #cfd7d3; box-shadow: -18px 0 50px rgba(10, 20, 16, 0.18); }
+.drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 20px; border-bottom: 1px solid #e0e6e3; }
+.drawer-header h2 { margin: 4px 0 6px; font-size: 21px; }
+.drawer-header p { margin: 0; color: #6f7c77; font-size: 12px; line-height: 1.45; }
+.drawer-kicker { color: #176b52; font-size: 9px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.download-scope { display: grid; gap: 5px; margin: 20px 0; padding: 14px; background: #f2f6f4; border: 1px solid #dbe4e0; border-radius: 6px; }
+.download-scope strong { color: #2d3d37; font-size: 13px; }
+.download-scope span { color: #687670; font-size: 11px; }
+.download-options { display: grid; gap: 10px; }
+.download-option { display: grid; grid-template-columns: 20px 1fr; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid #d8e0dc; border-radius: 6px; background: #fff; cursor: pointer; }
+.download-option:has(input:checked) { border-color: #8eb4a5; background: #f3f8f5; }
+.download-option input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: #176b52; }
+.download-option strong, .download-option small { display: block; }
+.download-option strong { color: #34433e; font-size: 13px; }
+.download-option small { margin-top: 5px; color: #6f7c77; font-size: 11px; font-weight: 400; line-height: 1.4; }
+.drawer-warning, .drawer-error { margin-top: 14px; padding: 11px 12px; font-size: 11px; line-height: 1.5; }
+.drawer-warning { border-left: 3px solid #d19b25; background: #fff8e7; color: #705516; }
+.drawer-error { border-left: 3px solid #b83f2e; background: #fff0ed; color: #733025; }
+.drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 24px; }
 .dialog { width: min(480px, 100%); padding: 22px; background: #fff; border: 1px solid #cfd7d3; box-shadow: 0 20px 60px rgba(10, 20, 16, 0.2); border-radius: 8px; }
 .dialog.wide { width: min(690px, 100%); }
 .dialog-header { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; }

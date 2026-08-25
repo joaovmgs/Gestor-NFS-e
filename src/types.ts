@@ -50,7 +50,12 @@ export interface SyncLog {
 export interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
-  environment: "producao" | "producao_restrita";
+}
+
+export interface DownloadOptions {
+  includeXml: boolean;
+  includePdf: boolean;
+  includeXlsx: boolean;
 }
 
 export interface ExportQueueStatus {
@@ -108,6 +113,11 @@ export interface NfseApi {
     startDate: string;
     endDate: string;
     direction: "emitida" | "recebida";
+    search?: string;
+    status?: "todas" | "autorizada" | "cancelada";
+    includeXml: boolean;
+    includePdf: boolean;
+    includeXlsx: boolean;
   }): Promise<ExportQueueResult | null>;
   getExportQueueStatus(): Promise<ExportQueueStatus>;
   onExportQueueStatus(callback: (status: ExportQueueStatus) => void): () => void;

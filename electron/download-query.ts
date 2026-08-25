@@ -11,6 +11,11 @@ export interface LegacyDownloadQuery extends AppliedDownloadQuery {
   data_inicial?: string;
   data_final?: string;
   tipo?: NoteDirection;
+  search?: string;
+  status?: "todas" | "autorizada" | "cancelada";
+  includeXml?: boolean;
+  includePdf?: boolean;
+  includeXlsx?: boolean;
 }
 
 export interface ResolvedDownloadQuery {

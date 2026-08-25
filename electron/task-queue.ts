@@ -13,7 +13,8 @@ export class SequentialTaskQueue<T> {
   constructor(
     private readonly worker: (item: T) => Promise<void>,
     private readonly onChange: (snapshot: QueueSnapshot) => void = () => undefined,
-    private readonly identify: (item: T) => string = () => ""
+    private readonly identify: (item: T) => string = () => "",
+    private readonly onError: (error: unknown, item: T) => void = () => undefined
   ) {}
 
   enqueue(item: T): number {
@@ -55,7 +56,11 @@ export class SequentialTaskQueue<T> {
         this.activeItem = item;
         this.emit();
         if (item !== undefined) {
-          await this.worker(item);
+          try {
+            await this.worker(item);
+          } catch (error) {
+            this.onError(error, item);
+          }
         }
         this.activeItem = undefined;
       }

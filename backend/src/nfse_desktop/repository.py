@@ -31,7 +31,6 @@ class Repository:
                 (
                     ("notes_directory", default_notes_dir),
                     ("notifications_enabled", "1"),
-                    ("environment", "producao"),
                 ),
             )
 
@@ -44,14 +43,12 @@ class Repository:
         return {
             "notes_directory": values.get("notes_directory", ""),
             "notifications_enabled": values.get("notifications_enabled", "1") == "1",
-            "environment": values.get("environment", "producao"),
         }
 
     def update_settings(
         self,
         notes_directory: str,
         notifications_enabled: bool,
-        environment: str,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             connection.executemany(
@@ -65,7 +62,6 @@ class Repository:
                 (
                     ("notes_directory", notes_directory),
                     ("notifications_enabled", "1" if notifications_enabled else "0"),
-                    ("environment", environment),
                 ),
             )
         return self.get_settings()
@@ -193,20 +189,44 @@ class Repository:
         start_date: str,
         end_date: str,
         direction: str,
+        search: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
+        filters = [
+            "company_cnpj = ?",
+            "document_type = 'NFSE'",
+            "direction = ?",
+            "date(issued_at) >= date(?)",
+            "date(issued_at) <= date(?)",
+        ]
+        parameters: list[Any] = [cnpj, direction, start_date, end_date]
+        if search:
+            normalized_search = search.strip().replace(",", ".")
+            filters.append(
+                """
+                (
+                  note_number LIKE ? OR access_key LIKE ? OR issuer_name LIKE ?
+                  OR customer_name LIKE ? OR printf('%.2f', service_amount) LIKE ?
+                )
+                """
+            )
+            pattern = f"%{normalized_search}%"
+            parameters.extend([pattern] * 5)
+        if status == "autorizada":
+            filters.append("lower(COALESCE(status, '')) IN ('', 'autorizada')")
+        elif status == "cancelada":
+            filters.append("lower(COALESCE(status, '')) = 'cancelada'")
+        where_clause = " AND ".join(filters)
+
         with self.database.connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT *
                 FROM documents
-                WHERE company_cnpj = ?
-                  AND document_type = 'NFSE'
-                  AND direction = ?
-                  AND date(issued_at) >= date(?)
-                  AND date(issued_at) <= date(?)
+                WHERE {where_clause}
                 ORDER BY issued_at, nsu
                 """,
-                (cnpj, direction, start_date, end_date),
+                parameters,
             ).fetchall()
         return [dict(row) for row in rows]
 

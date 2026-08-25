@@ -66,3 +66,29 @@ test("removes pending jobs by id without stopping the active job", async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(order, ["start:A", "end:A", "start:C", "end:C"]);
 });
+
+test("continues with pending jobs when one worker fails", async () => {
+  const processed: string[] = [];
+  const errors: string[] = [];
+  let finished: (() => void) | undefined;
+  const allFinished = new Promise<void>((resolve) => {
+    finished = resolve;
+  });
+  const queue = new SequentialTaskQueue<string>(
+    async (item) => {
+      processed.push(item);
+      if (item === "A") throw new Error("portal indisponivel");
+      finished?.();
+    },
+    () => undefined,
+    (item) => item,
+    (error) => errors.push(error instanceof Error ? error.message : String(error))
+  );
+
+  queue.enqueue("A");
+  queue.enqueue("B");
+  await allFinished;
+
+  assert.deepEqual(processed, ["A", "B"]);
+  assert.deepEqual(errors, ["portal indisponivel"]);
+});
