@@ -82,9 +82,16 @@ export interface CompanyRegistrationResult {
   has_invalid: boolean;
 }
 
+export interface PfxSelection {
+  id: string;
+  fileName: string;
+}
+
 export interface NfseApi {
   listCompanies(): Promise<Company[]>;
+  selectPfxCertificate(): Promise<PfxSelection | null>;
   registerPfxCompany(input: {
+    selectionId: string;
     password: string;
     remember: boolean;
     queryCnpj?: string;

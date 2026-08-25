@@ -193,6 +193,12 @@ td.money { font-weight: 700; text-align: right; }
 .method-options strong { font-size: 13px; }
 .method-options small { margin-top: 5px; color: #6e7b76; font-size: 11px; line-height: 1.35; }
 .method-icon { width: 40px; height: 40px; display: grid; place-items: center; background: #e4eee9; color: #176b52; border-radius: 6px; }
+.pfx-file-picker { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 11px; margin-bottom: 16px; padding: 12px; border: 1px dashed #b9c6c1; background: #f8faf9; border-radius: 6px; }
+.pfx-file-picker.selected { border-style: solid; border-color: #8eb4a5; background: #f2f8f5; }
+.pfx-file-picker strong, .pfx-file-picker small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pfx-file-picker strong { color: #34433e; font-size: 12px; }
+.pfx-file-picker small { margin-top: 4px; color: #6f7c77; font-size: 10px; }
+.dialog input:disabled { cursor: not-allowed; background: #eef1f0; color: #89938f; }
 .settings-form { display: grid; gap: 18px; }
 .settings-field { display: grid; gap: 7px; color: #44524d; font-size: 12px; font-weight: 700; }
 .settings-field > small { color: #74817c; font-size: 10px; font-weight: 400; }

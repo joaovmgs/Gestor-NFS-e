@@ -17,7 +17,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppSettings,
   Company,
@@ -25,6 +25,7 @@ import type {
   Document,
   DownloadOptions,
   ExportQueueStatus,
+  PfxSelection,
   SyncLog,
   WindowsCertificate
 } from "./types";
@@ -73,6 +74,7 @@ const currentMonthRange = () => {
 };
 
 export function App() {
+  const pfxPasswordInput = useRef<HTMLInputElement>(null);
   const initialRange = useMemo(currentMonthRange, []);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCnpj, setSelectedCnpj] = useState("");
@@ -85,6 +87,7 @@ export function App() {
   const [direction, setDirection] = useState<"emitida" | "recebida">("emitida");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [password, setPassword] = useState("");
+  const [selectedPfx, setSelectedPfx] = useState<PfxSelection | null>(null);
   const [syncPassword, setSyncPassword] = useState("");
   const [queryCnpjs, setQueryCnpjs] = useState([""]);
   const [pendingWindowsCertificate, setPendingWindowsCertificate] =
@@ -129,6 +132,7 @@ export function App() {
 
   function resetRegistrationState() {
     setPassword("");
+    setSelectedPfx(null);
     setQueryCnpjs([""]);
     setPendingWindowsCertificate(null);
     setRegistrationResult(null);
@@ -283,8 +287,13 @@ export function App() {
   async function submitPfxRegistration(allowPartial = false) {
     setMessage("");
     setDialogMessage("");
+    if (!selectedPfx) {
+      setDialogMessage("Selecione o arquivo PFX ou P12 antes de continuar.");
+      return;
+    }
     try {
       const result = await window.nfse.registerPfxCompany({
+        selectionId: selectedPfx.id,
         password,
         remember,
         queryCnpjs: normalizedQueryCnpjs(),
@@ -294,6 +303,16 @@ export function App() {
       await finishRegistration(result, allowPartial);
     } catch (error) {
       setDialogMessage(error instanceof Error ? error.message : "Nao foi possivel cadastrar.");
+    }
+  }
+
+  async function choosePfxCertificate() {
+    setDialogMessage("");
+    const selection = await window.nfse.selectPfxCertificate();
+    if (selection) {
+      setSelectedPfx(selection);
+      setPassword("");
+      window.setTimeout(() => pfxPasswordInput.current?.focus(), 0);
     }
   }
 
@@ -706,7 +725,29 @@ export function App() {
       {dialog === "pfx" && (
         <div className="dialog-backdrop" role="presentation">
           <form className="dialog" onSubmit={registerPfx}>
-            <div className="dialog-header"><div><h2>Cadastrar com PFX</h2><p>Selecione o arquivo depois de confirmar.</p></div><button type="button" className="icon-button" onClick={() => { setDialog(null); resetRegistrationState(); }}><X size={18} /></button></div>
+            <div className="dialog-header"><div><h2>Cadastrar com PFX</h2><p>Escolha o certificado e depois informe a senha.</p></div><button type="button" className="icon-button" onClick={() => { setDialog(null); resetRegistrationState(); }}><X size={18} /></button></div>
+            <div className={`pfx-file-picker ${selectedPfx ? "selected" : ""}`}>
+              <span className="method-icon"><FileKey2 size={22} /></span>
+              <span>
+                <strong>{selectedPfx?.fileName || "Nenhum certificado selecionado"}</strong>
+                <small>{selectedPfx ? "Arquivo pronto para validação." : "Selecione um arquivo com extensão PFX ou P12."}</small>
+              </span>
+              <button type="button" className="button secondary compact" onClick={choosePfxCertificate}>
+                {selectedPfx ? "Trocar arquivo" : "Selecionar arquivo"}
+              </button>
+            </div>
+            <label>
+              Senha do certificado
+              <input
+                ref={pfxPasswordInput}
+                type="password"
+                required
+                disabled={!selectedPfx}
+                placeholder={selectedPfx ? "Digite a senha" : "Selecione o arquivo primeiro"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
             <div className="cnpj-list-field">
               <span>CNPJs consultados</span>
               {queryCnpjs.map((cnpj, index) => (
@@ -717,7 +758,6 @@ export function App() {
               ))}
               <button type="button" className="button secondary compact" onClick={addQueryCnpjField}><Plus size={15} /> Adicionar filial</button>
             </div>
-            <label>Senha do certificado<input type="password" required autoFocus value={password} onChange={(event) => setPassword(event.target.value)} /></label>
             <div className="inline-info">Use o CNPJ consultado para cadastrar uma matriz ou filial da mesma raiz do certificado.</div>
             {dialogMessage && <div className="dialog-error">{dialogMessage}</div>}
             {registrationResult?.has_invalid && (
@@ -734,7 +774,7 @@ export function App() {
             )}
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span><strong>Armazenar certificado e senha</strong><small>Protegidos pela credencial do Windows para consultas futuras.</small></span></label>
             {!remember && <div className="inline-info">As notas continuarão salvas, mas o arquivo e a senha serão solicitados em cada nova consulta.</div>}
-            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => { setDialog(null); resetRegistrationState(); }}>Cancelar</button><button className="button primary"><FileKey2 size={17} /> Selecionar arquivo</button></div>
+            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => { setDialog(null); resetRegistrationState(); }}>Cancelar</button><button className="button primary" disabled={!selectedPfx || !password}><FileKey2 size={17} /> Cadastrar empresa</button></div>
           </form>
         </div>
       )}

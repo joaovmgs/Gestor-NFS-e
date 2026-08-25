@@ -15,7 +15,9 @@ async function invokeClean<T>(channel: string, ...args: unknown[]): Promise<T> {
 
 contextBridge.exposeInMainWorld("nfse", {
   listCompanies: () => invokeClean("companies:list"),
+  selectPfxCertificate: () => invokeClean("certificates:select-pfx"),
   registerPfxCompany: (input: {
+    selectionId: string;
     password: string;
     remember: boolean;
     queryCnpj?: string;

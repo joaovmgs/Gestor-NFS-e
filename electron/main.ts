@@ -43,6 +43,7 @@ const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 const removedCompanyCnpjs = new Set<string>();
 const syncRetryAttempts = new Map<string, number>();
 const syncRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingPfxSelections = new Map<string, { path: string; fileName: string }>();
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -668,20 +669,28 @@ function registerIpc(): void {
   ipcMain.handle("sync:logs", (_event, cnpj: string) =>
     api(`/companies/${cnpj}/sync/logs?limit=20`)
   );
-  ipcMain.handle("companies:register-pfx", async (_event, input) => {
+  ipcMain.handle("certificates:select-pfx", async () => {
     const selection = await dialog.showOpenDialog({
       title: "Selecionar certificado A1",
       properties: ["openFile"],
       filters: [{ name: "Certificado A1", extensions: ["pfx", "p12"] }]
     });
     if (selection.canceled || selection.filePaths.length === 0) return null;
-
-    const pfx = await readFile(selection.filePaths[0]);
+    const selectedPath = selection.filePaths[0];
+    const id = crypto.randomUUID();
+    pendingPfxSelections.clear();
+    pendingPfxSelections.set(id, { path: selectedPath, fileName: path.basename(selectedPath) });
+    return { id, fileName: path.basename(selectedPath) };
+  });
+  ipcMain.handle("companies:register-pfx", async (_event, input) => {
+    const selection = pendingPfxSelections.get(String(input.selectionId || ""));
+    if (!selection) throw new Error("Selecione o arquivo PFX ou P12 antes de continuar.");
+    const pfx = await readFile(selection.path);
     const form = new FormData();
     form.set(
       "certificate",
       new Blob([Uint8Array.from(pfx)]),
-      path.basename(selection.filePaths[0])
+      selection.fileName
     );
     form.set("password", input.password);
     form.set("remember_certificate", String(input.remember));
@@ -698,6 +707,7 @@ function registerIpc(): void {
     if (result.has_invalid && !input.allowPartial) {
       return result;
     }
+    pendingPfxSelections.delete(String(input.selectionId));
     if (input.remember) {
       for (const company of result.companies) {
         await saveCredential(company.cnpj, input.password, pfx);
