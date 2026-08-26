@@ -30,6 +30,7 @@ import {
 } from "./certificate-validation.js";
 import { downloadFile } from "./http-download.js";
 import { QueueSnapshot, SequentialTaskQueue } from "./task-queue.js";
+import { fetchLatestUpdate, UpdateStatus } from "./update-check.js";
 
 const execFileAsync = promisify(execFile);
 let backendProcess: ChildProcess | undefined;
@@ -44,6 +45,10 @@ const removedCompanyCnpjs = new Set<string>();
 const syncRetryAttempts = new Map<string, number>();
 const syncRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingPfxSelections = new Map<string, { path: string; fileName: string }>();
+let cachedUpdateStatus: UpdateStatus | undefined;
+let updateCheckedAt = 0;
+let notifiedUpdateVersion = "";
+let updateCheckPromise: Promise<UpdateStatus> | undefined;
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -302,6 +307,68 @@ async function showDesktopNotification(title: string, body: string): Promise<voi
     icon: appIconPath(),
     silent: false
   }).show();
+}
+
+async function notifyUpdateAvailable(status: UpdateStatus): Promise<void> {
+  if (
+    !status.updateAvailable ||
+    !status.latestVersion ||
+    notifiedUpdateVersion === status.latestVersion
+  ) return;
+  const settings = await api<AppSettings>("/settings");
+  if (!settings.notifications_enabled || !Notification.isSupported()) return;
+
+  const notification = new Notification({
+    title: `Gestor NFS-e ${status.latestVersion} disponível`,
+    body: "Clique para abrir a página oficial e baixar a atualização.",
+    icon: appIconPath(),
+    silent: false
+  });
+  notification.on("click", () => {
+    if (status.releaseUrl) void shell.openExternal(status.releaseUrl);
+  });
+  notification.show();
+  notifiedUpdateVersion = status.latestVersion;
+}
+
+function broadcastUpdateStatus(status: UpdateStatus): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("updates:status", status);
+  }
+}
+
+async function checkForUpdates(force = false): Promise<UpdateStatus> {
+  const cacheDuration = 15 * 60 * 1000;
+  if (!force && cachedUpdateStatus && Date.now() - updateCheckedAt < cacheDuration) {
+    return cachedUpdateStatus;
+  }
+  if (updateCheckPromise) return updateCheckPromise;
+
+  updateCheckPromise = (async () => {
+    const currentVersion = app.getVersion();
+    try {
+      cachedUpdateStatus = await fetchLatestUpdate(currentVersion);
+    } catch (error) {
+      cachedUpdateStatus = {
+        currentVersion,
+        updateAvailable: false,
+        checkedAt: new Date().toISOString(),
+        error: error instanceof Error
+          ? error.message
+          : "Não foi possível consultar as versões no GitHub."
+      };
+    }
+    updateCheckedAt = Date.now();
+    broadcastUpdateStatus(cachedUpdateStatus);
+    await notifyUpdateAvailable(cachedUpdateStatus).catch(() => undefined);
+    return cachedUpdateStatus;
+  })();
+
+  try {
+    return await updateCheckPromise;
+  } finally {
+    updateCheckPromise = undefined;
+  }
 }
 
 function broadcastExportQueue(snapshot: QueueSnapshot): void {
@@ -576,6 +643,12 @@ function windowsHelperPath(): string {
 }
 
 function registerIpc(): void {
+  ipcMain.handle("updates:check", (_event, force = false) => checkForUpdates(Boolean(force)));
+  ipcMain.handle("updates:open", async () => {
+    if (!cachedUpdateStatus?.updateAvailable || !cachedUpdateStatus.releaseUrl) return false;
+    await shell.openExternal(cachedUpdateStatus.releaseUrl);
+    return true;
+  });
   ipcMain.handle("exports:status", () => exportQueue.snapshot());
   ipcMain.handle("sync:status", () => syncQueue.snapshot());
   ipcMain.handle("settings:get", () => api("/settings"));
@@ -819,6 +892,7 @@ async function createTray(): Promise<void> {
       click: () => {
         mainWindow?.show();
         mainWindow?.focus();
+        void checkForUpdates().catch(() => undefined);
       }
     },
     { type: "separator" },
@@ -844,6 +918,10 @@ app.whenReady()
     registerIpc();
     await createWindow();
     await createTray();
+    void checkForUpdates().catch(() => undefined);
+    setInterval(() => {
+      void checkForUpdates(true).catch(() => undefined);
+    }, 6 * 60 * 60 * 1000).unref();
   })
   .catch((error) => {
     const message = error instanceof Error ? error.message : String(error);

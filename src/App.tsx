@@ -27,6 +27,7 @@ import type {
   ExportQueueStatus,
   PfxSelection,
   SyncLog,
+  UpdateStatus,
   WindowsCertificate
 } from "./types";
 
@@ -125,6 +126,9 @@ export function App() {
   });
   const [message, setMessage] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const selected = companies.find((company) => company.cnpj === selectedCnpj);
   const normalizedQueryCnpjs = () =>
@@ -231,6 +235,11 @@ export function App() {
       setLoading(false);
     });
     window.nfse.getSettings().then(setSettings).catch(() => undefined);
+    window.nfse.checkForUpdates().then(setUpdateStatus).catch(() => undefined);
+    return window.nfse.onUpdateStatus((status) => {
+      setUpdateStatus(status);
+      if (status.updateAvailable) setUpdateDismissed(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -335,6 +344,28 @@ export function App() {
       setDialog("settings");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao carregar configurações.");
+    }
+  }
+
+  async function refreshUpdateStatus(force = true) {
+    setCheckingUpdate(true);
+    try {
+      const status = await window.nfse.checkForUpdates(force);
+      setUpdateStatus(status);
+      if (status.updateAvailable) setUpdateDismissed(false);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Não foi possível verificar atualizações."
+      );
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
+  async function openUpdatePage() {
+    const opened = await window.nfse.openUpdatePage();
+    if (!opened) {
+      setMessage("Verifique novamente as atualizações antes de continuar.");
     }
   }
 
@@ -549,6 +580,29 @@ export function App() {
             </button>
           )}
         </header>
+
+        {updateStatus?.updateAvailable && !updateDismissed && (
+          <div className="update-notice">
+            <div className="update-notice-icon"><Download size={18} /></div>
+            <div>
+              <strong>Nova versão {updateStatus.latestVersion} disponível</strong>
+              <span>
+                Você está usando a versão {updateStatus.currentVersion}. Abra a página oficial
+                para baixar e instalar a atualização.
+              </span>
+            </div>
+            <button className="button update-action" onClick={openUpdatePage}>
+              Atualizar
+            </button>
+            <button
+              className="update-dismiss"
+              title="Dispensar este aviso"
+              onClick={() => setUpdateDismissed(true)}
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
 
         {message && <div className="notice">{message}<button onClick={() => setMessage("")}><X size={15} /></button></div>}
 
@@ -927,6 +981,39 @@ export function App() {
                 <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => setSettings((current) => ({ ...current, notifications_enabled: event.target.checked }))} />
                 <span><strong>Notificações do Windows</strong><small>Avisar quando uma sincronização for concluída.</small></span>
               </label>
+              <div className="settings-update">
+                <div className="settings-update-copy">
+                  <strong>Atualizações do Gestor</strong>
+                  <small>
+                    Versão instalada: {updateStatus?.currentVersion ?? "verificando..."}
+                    {updateStatus?.latestVersion
+                      ? ` · Versão mais recente: ${updateStatus.latestVersion}`
+                      : ""}
+                  </small>
+                  {updateStatus?.error && (
+                    <small className="settings-update-error">{updateStatus.error}</small>
+                  )}
+                  {updateStatus && !updateStatus.error && !updateStatus.updateAvailable && (
+                    <small className="settings-update-current">O aplicativo está atualizado.</small>
+                  )}
+                </div>
+                <div className="settings-update-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={checkingUpdate}
+                    onClick={() => refreshUpdateStatus()}
+                  >
+                    <RefreshCw className={checkingUpdate ? "spinning" : ""} size={15} />
+                    {checkingUpdate ? "Verificando..." : "Verificar"}
+                  </button>
+                  {updateStatus?.updateAvailable && (
+                    <button type="button" className="button primary" onClick={openUpdatePage}>
+                      <Download size={15} /> Atualizar
+                    </button>
+                  )}
+                </div>
+              </div>
               <a className="settings-repository" href={repositoryUrl} target="_blank" rel="noreferrer">
                 <Github size={20} />
                 <span>

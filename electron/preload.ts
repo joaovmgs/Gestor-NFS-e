@@ -54,6 +54,14 @@ contextBridge.exposeInMainWorld("nfse", {
   getSettings: () => invokeClean("settings:get"),
   updateSettings: (settings: AppSettings) => invokeClean("settings:update", settings),
   selectNotesDirectory: () => invokeClean("settings:select-directory"),
+  checkForUpdates: (force = false) => invokeClean("updates:check", force),
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) =>
+      callback(status);
+    ipcRenderer.on("updates:status", listener);
+    return () => ipcRenderer.removeListener("updates:status", listener);
+  },
+  openUpdatePage: () => invokeClean("updates:open"),
   minimizeWindow: () => invokeClean("window:minimize"),
   toggleMaximizeWindow: () => invokeClean("window:toggle-maximize"),
   closeWindow: () => invokeClean("window:close")
@@ -100,4 +108,14 @@ interface ExportQueueStatus {
 interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
+}
+
+interface UpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  publishedAt?: string;
+  checkedAt: string;
+  error?: string;
 }

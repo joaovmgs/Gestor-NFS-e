@@ -87,6 +87,16 @@ export interface PfxSelection {
   fileName: string;
 }
 
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  publishedAt?: string;
+  checkedAt: string;
+  error?: string;
+}
+
 export interface NfseApi {
   listCompanies(): Promise<Company[]>;
   selectPfxCertificate(): Promise<PfxSelection | null>;
@@ -135,6 +145,9 @@ export interface NfseApi {
   getSettings(): Promise<AppSettings>;
   updateSettings(settings: AppSettings): Promise<AppSettings>;
   selectNotesDirectory(): Promise<string | null>;
+  checkForUpdates(force?: boolean): Promise<UpdateStatus>;
+  onUpdateStatus(callback: (status: UpdateStatus) => void): () => void;
+  openUpdatePage(): Promise<boolean>;
   minimizeWindow(): Promise<void>;
   toggleMaximizeWindow(): Promise<void>;
   closeWindow(): Promise<void>;
