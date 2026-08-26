@@ -27,6 +27,7 @@ import type {
   ExportQueueStatus,
   PfxSelection,
   SyncLog,
+  UpdateDownloadProgress,
   UpdateStatus,
   WindowsCertificate
 } from "./types";
@@ -129,6 +130,7 @@ export function App() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null);
 
   const selected = companies.find((company) => company.cnpj === selectedCnpj);
   const normalizedQueryCnpjs = () =>
@@ -246,6 +248,8 @@ export function App() {
     window.nfse.getExportQueueStatus().then(setExportQueue).catch(() => undefined);
     return window.nfse.onExportQueueStatus(setExportQueue);
   }, []);
+
+  useEffect(() => window.nfse.onUpdateDownloadProgress(setUpdateProgress), []);
 
   useEffect(() => {
     window.nfse.getSyncQueueStatus().then(setSyncQueue).catch(() => undefined);
@@ -366,6 +370,22 @@ export function App() {
     const opened = await window.nfse.openUpdatePage();
     if (!opened) {
       setMessage("Verifique novamente as atualizações antes de continuar.");
+    }
+  }
+
+  async function installLatestUpdate() {
+    if (!updateStatus?.installerUrl || !updateStatus.installerDigest) {
+      await openUpdatePage();
+      return;
+    }
+    setMessage("");
+    try {
+      const started = await window.nfse.installUpdate();
+      if (!started) setUpdateProgress(null);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Não foi possível instalar a atualização."
+      );
     }
   }
 
@@ -504,6 +524,15 @@ export function App() {
   const selectedSyncPending = selected
     ? syncQueue.pendingIds.filter((cnpj) => cnpj === selected.cnpj).length
     : 0;
+  const updateBusy = updateProgress?.phase === "downloading" ||
+    updateProgress?.phase === "verifying";
+  const updateActionLabel = updateProgress?.phase === "downloading"
+    ? `Baixando ${updateProgress.percent ?? 0}%`
+    : updateProgress?.phase === "verifying"
+      ? "Validando..."
+      : updateStatus?.installerUrl && updateStatus.installerDigest
+        ? "Baixar e instalar"
+        : "Ver atualização";
 
   return (
     <div className="app-shell">
@@ -587,12 +616,26 @@ export function App() {
             <div>
               <strong>Nova versão {updateStatus.latestVersion} disponível</strong>
               <span>
-                Você está usando a versão {updateStatus.currentVersion}. Abra a página oficial
-                para baixar e instalar a atualização.
+                {updateProgress?.phase === "downloading"
+                  ? `Baixando o instalador oficial do GitHub: ${updateProgress.percent ?? 0}%.`
+                  : updateProgress?.phase === "verifying"
+                    ? "Download concluído. Conferindo a integridade SHA-256 do instalador."
+                    : updateProgress?.phase === "error"
+                      ? updateProgress.message
+                      : `Você está usando a versão ${updateStatus.currentVersion}. O Gestor pode baixar e abrir o instalador oficial.`}
               </span>
+              {updateProgress?.phase === "downloading" && (
+                <div className="update-progress-track">
+                  <span style={{ width: `${updateProgress.percent ?? 0}%` }} />
+                </div>
+              )}
             </div>
-            <button className="button update-action" onClick={openUpdatePage}>
-              Atualizar
+            <button
+              className="button update-action"
+              disabled={updateBusy}
+              onClick={installLatestUpdate}
+            >
+              {updateActionLabel}
             </button>
             <button
               className="update-dismiss"
@@ -1008,8 +1051,13 @@ export function App() {
                     {checkingUpdate ? "Verificando..." : "Verificar"}
                   </button>
                   {updateStatus?.updateAvailable && (
-                    <button type="button" className="button primary" onClick={openUpdatePage}>
-                      <Download size={15} /> Atualizar
+                    <button
+                      type="button"
+                      className="button primary"
+                      disabled={updateBusy}
+                      onClick={installLatestUpdate}
+                    >
+                      <Download size={15} /> {updateActionLabel}
                     </button>
                   )}
                 </div>

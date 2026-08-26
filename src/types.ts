@@ -93,8 +93,20 @@ export interface UpdateStatus {
   updateAvailable: boolean;
   releaseUrl?: string;
   publishedAt?: string;
+  installerName?: string;
+  installerUrl?: string;
+  installerSize?: number;
+  installerDigest?: string;
   checkedAt: string;
   error?: string;
+}
+
+export interface UpdateDownloadProgress {
+  phase: "downloading" | "verifying" | "ready" | "error";
+  downloadedBytes?: number;
+  totalBytes?: number;
+  percent?: number;
+  message?: string;
 }
 
 export interface NfseApi {
@@ -148,6 +160,10 @@ export interface NfseApi {
   checkForUpdates(force?: boolean): Promise<UpdateStatus>;
   onUpdateStatus(callback: (status: UpdateStatus) => void): () => void;
   openUpdatePage(): Promise<boolean>;
+  installUpdate(): Promise<boolean>;
+  onUpdateDownloadProgress(
+    callback: (progress: UpdateDownloadProgress) => void
+  ): () => void;
   minimizeWindow(): Promise<void>;
   toggleMaximizeWindow(): Promise<void>;
   closeWindow(): Promise<void>;

@@ -62,6 +62,17 @@ contextBridge.exposeInMainWorld("nfse", {
     return () => ipcRenderer.removeListener("updates:status", listener);
   },
   openUpdatePage: () => invokeClean("updates:open"),
+  installUpdate: () => invokeClean("updates:install"),
+  onUpdateDownloadProgress: (
+    callback: (progress: UpdateDownloadProgress) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      progress: UpdateDownloadProgress
+    ) => callback(progress);
+    ipcRenderer.on("updates:download-progress", listener);
+    return () => ipcRenderer.removeListener("updates:download-progress", listener);
+  },
   minimizeWindow: () => invokeClean("window:minimize"),
   toggleMaximizeWindow: () => invokeClean("window:toggle-maximize"),
   closeWindow: () => invokeClean("window:close")
@@ -116,6 +127,18 @@ interface UpdateStatus {
   updateAvailable: boolean;
   releaseUrl?: string;
   publishedAt?: string;
+  installerName?: string;
+  installerUrl?: string;
+  installerSize?: number;
+  installerDigest?: string;
   checkedAt: string;
   error?: string;
+}
+
+interface UpdateDownloadProgress {
+  phase: "downloading" | "verifying" | "ready" | "error";
+  downloadedBytes?: number;
+  totalBytes?: number;
+  percent?: number;
+  message?: string;
 }

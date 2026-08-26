@@ -67,7 +67,10 @@ button { cursor: pointer; }
 .update-notice strong, .update-notice span { display: block; }
 .update-notice strong { font-size: 13px; }
 .update-notice span { margin-top: 4px; color: #557168; font-size: 11px; line-height: 1.4; }
+.update-progress-track { width: min(420px, 100%); height: 5px; margin-top: 8px; overflow: hidden; background: #cfe4db; border-radius: 999px; }
+.update-progress-track span { height: 100%; margin: 0; background: #176b52; border-radius: inherit; transition: width 180ms ease; }
 .button.update-action { min-height: 34px; background: #176b52; color: #fff; }
+.button.update-action:disabled { cursor: wait; opacity: .72; }
 .update-dismiss { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: #557168; border-radius: 5px; }
 .update-dismiss:hover { background: #dcefe7; color: #174d3b; }
 

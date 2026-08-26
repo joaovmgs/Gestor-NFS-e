@@ -17,10 +17,19 @@ test("streams a download directly to disk", async () => {
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Servidor de teste sem porta.");
   const destination = path.join(tmpdir(), `gestor-nfse-download-${Date.now()}.zip`);
+  const progress: Array<{ downloadedBytes: number; percent?: number }> = [];
 
   try {
-    await downloadFile(`http://127.0.0.1:${address?.port}/documents.zip`, destination);
+    await downloadFile(
+      `http://127.0.0.1:${address?.port}/documents.zip`,
+      destination,
+      {},
+      (status) => {
+        progress.push(status);
+      }
+    );
     assert.deepEqual(await readFile(destination), payload);
+    assert.equal(progress.at(-1)?.downloadedBytes, payload.length);
   } finally {
     server.close();
     await rm(destination, { force: true });

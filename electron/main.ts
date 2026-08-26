@@ -11,9 +11,9 @@ import {
   Tray
 } from "electron";
 import { ChildProcess, execFile, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:net";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import crypto from "node:crypto";
@@ -49,6 +49,7 @@ let cachedUpdateStatus: UpdateStatus | undefined;
 let updateCheckedAt = 0;
 let notifiedUpdateVersion = "";
 let updateCheckPromise: Promise<UpdateStatus> | undefined;
+let updateInstallInProgress = false;
 
 app.setPath("userData", path.join(app.getPath("appData"), "nfse-desktop"));
 app.setName("Gestor NFS-e");
@@ -92,6 +93,14 @@ interface CompanyRecord {
 
 interface AppSettings {
   notifications_enabled: boolean;
+}
+
+interface UpdateDownloadProgress {
+  phase: "downloading" | "verifying" | "ready" | "error";
+  downloadedBytes?: number;
+  totalBytes?: number;
+  percent?: number;
+  message?: string;
 }
 
 async function freePort(): Promise<number> {
@@ -337,6 +346,102 @@ function broadcastUpdateStatus(status: UpdateStatus): void {
   }
 }
 
+function broadcastUpdateProgress(progress: UpdateDownloadProgress): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("updates:download-progress", progress);
+  }
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = crypto.createHash("sha256");
+  await new Promise<void>((resolve, reject) => {
+    const input = createReadStream(filePath);
+    input.on("data", (chunk) => hash.update(chunk));
+    input.on("error", reject);
+    input.on("end", resolve);
+  });
+  return hash.digest("hex");
+}
+
+async function downloadAndInstallUpdate(): Promise<boolean> {
+  if (updateInstallInProgress) {
+    throw new Error("A atualização já está sendo baixada.");
+  }
+  const status = await checkForUpdates();
+  if (
+    !status.updateAvailable ||
+    !status.latestVersion ||
+    !status.installerName ||
+    !status.installerUrl ||
+    !status.installerDigest
+  ) {
+    throw new Error(
+      "A versão foi encontrada, mas o instalador oficial com assinatura SHA-256 não está disponível."
+    );
+  }
+
+  updateInstallInProgress = true;
+  const destination = path.join(app.getPath("temp"), status.installerName);
+  try {
+    await rm(destination, { force: true });
+    broadcastUpdateProgress({
+      phase: "downloading",
+      downloadedBytes: 0,
+      totalBytes: status.installerSize,
+      percent: 0
+    });
+    await downloadFile(
+      status.installerUrl,
+      destination,
+      { "User-Agent": `Gestor-NFSe/${status.currentVersion}` },
+      (progress) => broadcastUpdateProgress({ phase: "downloading", ...progress })
+    );
+
+    broadcastUpdateProgress({ phase: "verifying", message: "Validando o instalador..." });
+    const file = await stat(destination);
+    if (status.installerSize && file.size !== status.installerSize) {
+      throw new Error("O tamanho do instalador baixado não corresponde ao arquivo do GitHub.");
+    }
+    const expectedDigest = status.installerDigest.replace(/^sha256:/iu, "");
+    const actualDigest = await sha256File(destination);
+    if (actualDigest !== expectedDigest) {
+      throw new Error("A verificação SHA-256 do instalador falhou.");
+    }
+
+    broadcastUpdateProgress({ phase: "ready", percent: 100, message: "Instalador validado." });
+    const options = {
+      type: "info" as const,
+      title: `Atualizar para ${status.latestVersion}`,
+      message: "O instalador foi baixado e validado.",
+      detail: "O Gestor NFS-e será fechado para iniciar a atualização.",
+      buttons: ["Instalar agora", "Cancelar"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    };
+    const confirmation = mainWindow
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options);
+    if (confirmation.response !== 0) return false;
+
+    spawn(destination, [], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false
+    }).unref();
+    isQuitting = true;
+    app.quit();
+    return true;
+  } catch (error) {
+    await rm(destination, { force: true }).catch(() => undefined);
+    const message = error instanceof Error ? error.message : "Falha ao baixar a atualização.";
+    broadcastUpdateProgress({ phase: "error", message });
+    throw error;
+  } finally {
+    updateInstallInProgress = false;
+  }
+}
+
 async function checkForUpdates(force = false): Promise<UpdateStatus> {
   const cacheDuration = 15 * 60 * 1000;
   if (!force && cachedUpdateStatus && Date.now() - updateCheckedAt < cacheDuration) {
@@ -345,7 +450,10 @@ async function checkForUpdates(force = false): Promise<UpdateStatus> {
   if (updateCheckPromise) return updateCheckPromise;
 
   updateCheckPromise = (async () => {
-    const currentVersion = app.getVersion();
+    const currentVersion =
+      !app.isPackaged && process.env.NFSE_TEST_CURRENT_VERSION
+        ? process.env.NFSE_TEST_CURRENT_VERSION
+        : app.getVersion();
     try {
       cachedUpdateStatus = await fetchLatestUpdate(currentVersion);
     } catch (error) {
@@ -649,6 +757,7 @@ function registerIpc(): void {
     await shell.openExternal(cachedUpdateStatus.releaseUrl);
     return true;
   });
+  ipcMain.handle("updates:install", () => downloadAndInstallUpdate());
   ipcMain.handle("exports:status", () => exportQueue.snapshot());
   ipcMain.handle("sync:status", () => syncQueue.snapshot());
   ipcMain.handle("settings:get", () => api("/settings"));

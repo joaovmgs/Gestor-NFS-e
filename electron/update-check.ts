@@ -4,6 +4,10 @@ export interface UpdateStatus {
   updateAvailable: boolean;
   releaseUrl?: string;
   publishedAt?: string;
+  installerName?: string;
+  installerUrl?: string;
+  installerSize?: number;
+  installerDigest?: string;
   checkedAt: string;
   error?: string;
 }
@@ -11,6 +15,14 @@ export interface UpdateStatus {
 interface GithubRelease {
   tag_name?: unknown;
   published_at?: unknown;
+  assets?: unknown;
+}
+
+interface GithubReleaseAsset {
+  name?: unknown;
+  browser_download_url?: unknown;
+  size?: unknown;
+  digest?: unknown;
 }
 
 const latestReleaseApiUrl =
@@ -66,6 +78,17 @@ export async function fetchLatestUpdate(
     }
 
     const latestVersion = displayVersion(release.tag_name);
+    const installerName = `Gestor-NFSe-Setup-${latestVersion}.exe`;
+    const assets = Array.isArray(release.assets)
+      ? release.assets as GithubReleaseAsset[]
+      : [];
+    const installer = assets.find((asset) =>
+      asset.name === installerName &&
+      typeof asset.browser_download_url === "string" &&
+      asset.browser_download_url.startsWith(
+        "https://github.com/joaovmgs/Gestor-NFS-e/releases/download/"
+      )
+    );
     return {
       currentVersion,
       latestVersion,
@@ -73,6 +96,18 @@ export async function fetchLatestUpdate(
       releaseUrl: `${releasePageBaseUrl}${encodeURIComponent(release.tag_name)}`,
       publishedAt:
         typeof release.published_at === "string" ? release.published_at : undefined,
+      installerName: installer ? installerName : undefined,
+      installerUrl:
+        installer && typeof installer.browser_download_url === "string"
+          ? installer.browser_download_url
+          : undefined,
+      installerSize:
+        installer && typeof installer.size === "number" ? installer.size : undefined,
+      installerDigest:
+        installer && typeof installer.digest === "string" &&
+        /^sha256:[a-f0-9]{64}$/iu.test(installer.digest)
+          ? installer.digest.toLowerCase()
+          : undefined,
       checkedAt: new Date().toISOString()
     };
   } finally {
