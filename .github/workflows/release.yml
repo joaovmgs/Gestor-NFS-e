@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existente que será empacotada e publicada"
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -16,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Node.js
         uses: actions/setup-node@v4
@@ -54,7 +65,7 @@ jobs:
           npm test
 
       - name: Set package version
-        run: npm version "${{ github.ref_name }}" --no-git-tag-version --allow-same-version
+        run: npm version "${{ env.RELEASE_TAG }}" --no-git-tag-version --allow-same-version
 
       - name: Build installer
         run: npm run dist:win
@@ -65,6 +76,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $installer = Get-ChildItem "release\Gestor-NFSe-Setup-*.exe" | Select-Object -First 1
-          gh release create "${{ github.ref_name }}" $installer.FullName `
+          gh release create "${{ env.RELEASE_TAG }}" $installer.FullName `
             --generate-notes `
-            --title "Gestor NFS-e ${{ github.ref_name }}"
+            --title "Gestor NFS-e ${{ env.RELEASE_TAG }}"
