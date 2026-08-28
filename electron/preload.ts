@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld("nfse", {
     invokeClean("companies:update-settings", { cnpj, settings }),
   reorganizeDominioXmls: (cnpj: string) =>
     invokeClean("companies:reorganize-dominio", cnpj),
+  onDominioReorganizationProgress: (
+    callback: (progress: ReorganizationResult) => void
+  ) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: ReorganizationResult) =>
+      callback(progress);
+    ipcRenderer.on("companies:reorganize-progress", listener);
+    return () => ipcRenderer.removeListener("companies:reorganize-progress", listener);
+  },
   listDocuments: (input: DocumentQuery) => invokeClean("documents:list", input),
   downloadDocuments: (input: DownloadQuery) =>
     invokeClean("documents:download", input),
@@ -129,6 +137,17 @@ interface AppSettings {
 interface CompanySettingsInput {
   dominio_code: string;
   dominio_alias: string;
+}
+
+interface ReorganizationResult {
+  state: "running" | "completed" | "failed";
+  total: number;
+  processed: number;
+  moved: number;
+  skipped: number;
+  errors: number;
+  details: string[];
+  message?: string;
 }
 
 interface UpdateStatus {

@@ -61,6 +61,9 @@ export interface CompanySettingsInput {
 }
 
 export interface ReorganizationResult {
+  state: "running" | "completed" | "failed";
+  total: number;
+  processed: number;
   moved: number;
   skipped: number;
   errors: number;
@@ -144,6 +147,9 @@ export interface NfseApi {
   deleteCompany(cnpj: string): Promise<{ removed: boolean }>;
   updateCompanySettings(cnpj: string, settings: CompanySettingsInput): Promise<Company>;
   reorganizeDominioXmls(cnpj: string): Promise<ReorganizationResult>;
+  onDominioReorganizationProgress(
+    callback: (progress: ReorganizationResult) => void
+  ): () => void;
   listDocuments(input: {
     cnpj: string;
     startDate?: string;

@@ -106,11 +106,13 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def update_document_xml_path(self, document_id: int, xml_path: str) -> None:
+    def update_document_xml_paths(self, updates: list[tuple[str, int]]) -> None:
+        if not updates:
+            return
         with self.database.connect() as connection:
-            connection.execute(
+            connection.executemany(
                 "UPDATE documents SET xml_path = ? WHERE id = ?",
-                (xml_path, document_id),
+                updates,
             )
 
     def get_company(self, cnpj: str) -> dict[str, Any] | None:

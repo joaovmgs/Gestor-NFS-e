@@ -20,7 +20,7 @@ from .config import Settings
 from .database import Database
 from .exporter import DocumentExporter
 from .repository import Repository
-from .storage import reorganize_company_xmls, validate_dominio_configuration
+from .storage import ReorganizationManager, validate_dominio_configuration
 from .sync import SyncService
 
 
@@ -130,6 +130,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repository = Repository(database)
     sync_service = SyncService(repository, current_settings.data_dir)
     exporter = DocumentExporter(repository)
+    reorganization_manager = ReorganizationManager(repository)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -196,11 +197,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return company
 
     @app.post("/companies/{cnpj}/dominio/reorganize", dependencies=[Depends(authorize)])
-    def reorganize_dominio_xmls(cnpj: str):
+    def start_dominio_reorganization(cnpj: str):
         try:
-            return reorganize_company_xmls(repository, cnpj)
+            return reorganization_manager.start(cnpj)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get(
+        "/companies/{cnpj}/dominio/reorganize",
+        dependencies=[Depends(authorize)],
+    )
+    def get_dominio_reorganization(cnpj: str):
+        try:
+            return reorganization_manager.status(cnpj)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/companies/pfx", dependencies=[Depends(authorize)])
     async def create_pfx_company(

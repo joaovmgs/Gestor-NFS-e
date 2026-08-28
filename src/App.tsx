@@ -26,6 +26,7 @@ import type {
   DownloadOptions,
   ExportQueueStatus,
   PfxSelection,
+  ReorganizationResult,
   SyncLog,
   UpdateDownloadProgress,
   UpdateStatus,
@@ -132,6 +133,8 @@ export function App() {
   });
   const [companySettingsMessage, setCompanySettingsMessage] = useState("");
   const [reorganizingXmls, setReorganizingXmls] = useState(false);
+  const [reorganizationProgress, setReorganizationProgress] =
+    useState<ReorganizationResult | null>(null);
   const [message, setMessage] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -257,6 +260,11 @@ export function App() {
   }, []);
 
   useEffect(() => window.nfse.onUpdateDownloadProgress(setUpdateProgress), []);
+
+  useEffect(
+    () => window.nfse.onDominioReorganizationProgress(setReorganizationProgress),
+    []
+  );
 
   useEffect(() => {
     window.nfse.getSyncQueueStatus().then(setSyncQueue).catch(() => undefined);
@@ -455,10 +463,12 @@ export function App() {
       return;
     }
     setCompanySettingsMessage("");
+    setReorganizationProgress(null);
     setReorganizingXmls(true);
     try {
       await persistCompanySettings();
       const result = await window.nfse.reorganizeDominioXmls(selected.cnpj);
+      setReorganizationProgress(result);
       const summary = `${result.moved} movido(s), ${result.skipped} já organizado(s) e ${result.errors} erro(s).`;
       setCompanySettingsMessage(
         result.details.length ? `${summary} ${result.details[0]}` : summary
@@ -1235,9 +1245,27 @@ export function App() {
                   onClick={reorganizeDominioXmls}
                 >
                   <RefreshCw className={reorganizingXmls ? "spinning" : ""} size={15} />
-                  {reorganizingXmls ? "Reorganizando..." : "Reorganizar XMLs existentes"}
+                  {reorganizingXmls
+                    ? reorganizationProgress?.total
+                      ? `${reorganizationProgress.processed}/${reorganizationProgress.total}`
+                      : "Preparando..."
+                    : "Reorganizar XMLs existentes"}
                 </button>
               </div>
+              {reorganizingXmls && reorganizationProgress?.total ? (
+                <div className="reorganization-progress">
+                  <span>
+                    Processando XMLs: {reorganizationProgress.processed} de {reorganizationProgress.total}
+                  </span>
+                  <div>
+                    <i style={{
+                      width: `${Math.round(
+                        (reorganizationProgress.processed / reorganizationProgress.total) * 100
+                      )}%`
+                    }} />
+                  </div>
+                </div>
+              ) : null}
               {companySettingsMessage && (
                 <div className="company-settings-feedback">{companySettingsMessage}</div>
               )}

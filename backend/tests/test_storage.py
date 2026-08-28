@@ -6,6 +6,7 @@ import pytest
 from nfse_desktop.database import Database
 from nfse_desktop.repository import Repository
 from nfse_desktop.storage import (
+    REORGANIZATION_BATCH_SIZE,
     document_xml_path,
     reorganize_company_xmls,
     validate_dominio_configuration,
@@ -142,7 +143,15 @@ def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path) -> Non
     result = reorganize_company_xmls(repository, CNPJ)
 
     expected = tmp_path / "Notas" / "40-CAPITAL TRADE" / "012026" / old_path.name
-    assert result == {"moved": 1, "skipped": 0, "errors": 0, "details": []}
+    assert result == {
+        "state": "completed",
+        "total": 1,
+        "processed": 1,
+        "moved": 1,
+        "skipped": 0,
+        "errors": 0,
+        "details": [],
+    }
     assert expected.read_text(encoding="utf-8") == "<NFSe />"
     assert not old_path.exists()
     stored = repository.list_company_nfse_documents(CNPJ)
@@ -184,3 +193,51 @@ def test_reorganize_does_not_overwrite_different_file(tmp_path: Path) -> None:
     assert result["errors"] == 1
     assert old_path.read_text(encoding="utf-8") == "origem"
     assert destination.read_text(encoding="utf-8") == "destino diferente"
+
+
+def test_large_reorganization_updates_database_in_batches(tmp_path: Path) -> None:
+    class BatchRepository:
+        def __init__(self) -> None:
+            self.update_calls: list[list[tuple[str, int]]] = []
+            self.documents = []
+            for index in range(REORGANIZATION_BATCH_SIZE * 2 + 1):
+                source = tmp_path / "legacy" / f"{index}.xml"
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text(f"<NFSe id='{index}' />", encoding="utf-8")
+                self.documents.append(
+                    {
+                        "id": index + 1,
+                        "nsu": index + 1,
+                        "access_key": f"CHAVE-{index}",
+                        "issued_at": "2026-01-20",
+                        "xml_path": str(source),
+                    }
+                )
+
+        def get_settings(self):
+            return {
+                "dominio_folder_layout_enabled": True,
+                "notes_directory": str(tmp_path / "Notas"),
+            }
+
+        def get_company(self, _cnpj):
+            return {"dominio_code": "40", "dominio_alias": "EMPRESA"}
+
+        def list_company_nfse_documents(self, _cnpj):
+            return self.documents
+
+        def update_document_xml_paths(self, updates):
+            self.update_calls.append(list(updates))
+
+    repository = BatchRepository()
+
+    result = reorganize_company_xmls(repository, CNPJ)
+
+    assert result["state"] == "completed"
+    assert result["processed"] == REORGANIZATION_BATCH_SIZE * 2 + 1
+    assert result["moved"] == REORGANIZATION_BATCH_SIZE * 2 + 1
+    assert [len(batch) for batch in repository.update_calls] == [
+        REORGANIZATION_BATCH_SIZE,
+        REORGANIZATION_BATCH_SIZE,
+        1,
+    ]

@@ -98,6 +98,17 @@ interface AppSettings {
   dominio_folder_layout_enabled: boolean;
 }
 
+interface ReorganizationStatus {
+  state: "running" | "completed" | "failed";
+  total: number;
+  processed: number;
+  moved: number;
+  skipped: number;
+  errors: number;
+  details: string[];
+  message?: string;
+}
+
 interface UpdateDownloadProgress {
   phase: "downloading" | "verifying" | "ready" | "error";
   downloadedBytes?: number;
@@ -793,9 +804,22 @@ function registerIpc(): void {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input.settings)
   }));
-  ipcMain.handle("companies:reorganize-dominio", (_event, cnpj: string) =>
-    api(`/companies/${cnpj}/dominio/reorganize`, { method: "POST" })
-  );
+  ipcMain.handle("companies:reorganize-dominio", async (_event, cnpj: string) => {
+    let status = await api<ReorganizationStatus>(
+      `/companies/${cnpj}/dominio/reorganize`,
+      { method: "POST" }
+    );
+    while (status.state === "running") {
+      mainWindow?.webContents.send("companies:reorganize-progress", status);
+      await wait(500);
+      status = await api<ReorganizationStatus>(`/companies/${cnpj}/dominio/reorganize`);
+    }
+    mainWindow?.webContents.send("companies:reorganize-progress", status);
+    if (status.state === "failed") {
+      throw new Error(status.message || "A reorganização dos XMLs não foi concluída.");
+    }
+    return status;
+  });
   ipcMain.handle("documents:list", (_event, input) => {
     lastDocumentQueryByCompany.set(input.cnpj, {
       startDate: input.startDate || input.data_inicial,
