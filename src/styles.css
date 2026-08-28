@@ -53,6 +53,8 @@ button { cursor: pointer; }
 .topbar h1 { margin: 0; max-width: 550px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; letter-spacing: 0; }
 .topbar p { margin: 4px 0 0; color: #65736e; font-size: 12px; }
 .topbar-actions, .welcome-actions, .dialog-actions { display: flex; gap: 9px; }
+.topbar .company-settings-trigger { width: 36px; height: 36px; border: 1px solid #cfd7d3; color: #4c5d56; }
+.topbar .company-settings-trigger:hover { border-color: #8ca99e; background: #f1f6f3; color: #176b52; }
 .button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; border: 1px solid transparent; border-radius: 6px; font-weight: 650; font-size: 13px; }
 .button.primary { background: #176b52; color: #fff; }
 .button.primary:hover { background: #125c45; }
@@ -218,6 +220,8 @@ td.money { font-weight: 700; text-align: right; }
 .directory-input input { min-width: 0; height: 36px; padding: 0 10px; border: 1px solid #cbd4d0; background: #f6f8f7; color: #44524d; border-radius: 5px; font-size: 11px; }
 .directory-input .icon-button { width: 36px; height: 36px; }
 .settings-check { margin-top: 0; }
+.experimental-check { border-color: #ead39a; background: #fffaf0; }
+.experimental-check em { display: inline-block; margin-left: 6px; padding: 2px 5px; background: #f1d98f; color: #67500e; border-radius: 3px; font-size: 8px; font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; }
 .settings-update { min-height: 76px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px; border: 1px solid #dbe2df; background: #f7f9f8; border-radius: 6px; }
 .settings-update-copy strong, .settings-update-copy small { display: block; }
 .settings-update-copy strong { color: #34433e; font-size: 12px; }
@@ -231,6 +235,23 @@ td.money { font-weight: 700; text-align: right; }
 .settings-repository strong, .settings-repository small { display: block; }
 .settings-repository strong { font-size: 12px; }
 .settings-repository small { margin-top: 4px; color: #6f7c77; font-size: 10px; font-weight: 400; }
+.company-settings-section { display: grid; gap: 16px; }
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 13px; border-bottom: 1px solid #e0e6e3; }
+.section-heading strong, .section-heading small { display: block; }
+.section-heading strong { color: #34433e; font-size: 13px; }
+.section-heading small { margin-top: 4px; color: #6f7c77; font-size: 10px; }
+.experimental-badge { padding: 4px 7px; background: #f1d98f; color: #67500e; border-radius: 4px; font-size: 8px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.company-settings-grid { display: grid; grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.3fr); gap: 13px; }
+.company-settings-grid label small { color: #74817c; font-size: 10px; font-weight: 400; }
+.path-preview { display: grid; gap: 6px; padding: 11px 12px; border: 1px solid #dbe2df; background: #f5f8f6; border-radius: 6px; }
+.path-preview span { color: #60706a; font-size: 9px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.path-preview code { overflow-wrap: anywhere; color: #27483d; font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; line-height: 1.5; }
+.reorganize-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px; border: 1px solid #dbe2df; border-radius: 6px; }
+.reorganize-panel strong, .reorganize-panel small { display: block; }
+.reorganize-panel strong { color: #34433e; font-size: 12px; }
+.reorganize-panel small { margin-top: 4px; color: #6f7c77; font-size: 10px; line-height: 1.45; }
+.reorganize-panel .button { min-height: 34px; padding: 0 10px; font-size: 10px; white-space: nowrap; }
+.company-settings-feedback { padding: 10px 12px; border-left: 3px solid #d19b25; background: #fff8e7; color: #705516; font-size: 11px; line-height: 1.5; }
 .certificate-list { max-height: 430px; overflow: auto; border: 1px solid #d9e0dd; }
 .certificate-list > button { width: 100%; min-height: 76px; display: grid; grid-template-columns: 40px 1fr 20px; align-items: center; gap: 12px; padding: 10px 14px; border: 0; border-bottom: 1px solid #e1e6e4; background: #fff; color: #293731; text-align: left; }
 .certificate-list > button:hover { background: #f1f6f3; }
@@ -246,4 +267,8 @@ td.money { font-weight: 700; text-align: right; }
   .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-search, .filter-actions { grid-column: 1 / -1; }
   .filter-actions { justify-content: flex-end; }
+}
+
+@media (max-width: 760px) {
+  .company-settings-grid, .reorganize-panel { grid-template-columns: 1fr; }
 }

@@ -32,7 +32,7 @@ import type {
   WindowsCertificate
 } from "./types";
 
-type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "download" | "delete-company" | null;
+type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "company-settings" | "download" | "delete-company" | null;
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
 
 const formatCnpj = (value: string) =>
@@ -123,8 +123,15 @@ export function App() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [settings, setSettings] = useState<AppSettings>({
     notes_directory: "",
-    notifications_enabled: true
+    notifications_enabled: true,
+    dominio_folder_layout_enabled: false
   });
+  const [companySettings, setCompanySettings] = useState({
+    dominio_code: "",
+    dominio_alias: ""
+  });
+  const [companySettingsMessage, setCompanySettingsMessage] = useState("");
+  const [reorganizingXmls, setReorganizingXmls] = useState(false);
   const [message, setMessage] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -406,6 +413,65 @@ export function App() {
     }
   }
 
+  async function openCompanySettings() {
+    if (!selected) return;
+    setCompanySettings({
+      dominio_code: selected.dominio_code ?? "",
+      dominio_alias: selected.dominio_alias ?? ""
+    });
+    setCompanySettingsMessage("");
+    setDialog("company-settings");
+  }
+
+  async function persistCompanySettings() {
+    if (!selected) return null;
+    const updated = await window.nfse.updateCompanySettings(selected.cnpj, companySettings);
+    setCompanies((current) =>
+      current.map((company) => (company.cnpj === updated.cnpj ? updated : company))
+    );
+    return updated;
+  }
+
+  async function saveCompanySettings(event: FormEvent) {
+    event.preventDefault();
+    setCompanySettingsMessage("");
+    try {
+      await persistCompanySettings();
+      setDialog(null);
+      setMessage("Configurações da empresa salvas.");
+    } catch (error) {
+      setCompanySettingsMessage(
+        error instanceof Error ? error.message : "Falha ao salvar as configurações da empresa."
+      );
+    }
+  }
+
+  async function reorganizeDominioXmls() {
+    if (!selected) return;
+    if (!settings.dominio_folder_layout_enabled) {
+      setCompanySettingsMessage(
+        "Ative primeiro a organização de pastas para o Domínio nas configurações gerais."
+      );
+      return;
+    }
+    setCompanySettingsMessage("");
+    setReorganizingXmls(true);
+    try {
+      await persistCompanySettings();
+      const result = await window.nfse.reorganizeDominioXmls(selected.cnpj);
+      const summary = `${result.moved} movido(s), ${result.skipped} já organizado(s) e ${result.errors} erro(s).`;
+      setCompanySettingsMessage(
+        result.details.length ? `${summary} ${result.details[0]}` : summary
+      );
+    } catch (error) {
+      setCompanySettingsMessage(
+        error instanceof Error ? error.message : "Falha ao reorganizar os XMLs."
+      );
+    } finally {
+      setReorganizingXmls(false);
+    }
+  }
+
   async function registerWindows(certificate: WindowsCertificate, allowPartial = false) {
     setMessage("");
     setDialogMessage("");
@@ -604,9 +670,19 @@ export function App() {
             <p>{selected ? formatCnpj(selected.cnpj) : "Cadastre uma empresa para iniciar"}</p>
           </div>
           {selected && (
-            <button className="button danger" onClick={() => setDialog("delete-company")}>
-              <Trash2 size={16} /> Remover empresa
-            </button>
+            <div className="topbar-actions">
+              <button
+                className="icon-button company-settings-trigger"
+                title="Configurações da empresa"
+                aria-label="Configurações da empresa"
+                onClick={openCompanySettings}
+              >
+                <Settings size={17} />
+              </button>
+              <button className="button danger" onClick={() => setDialog("delete-company")}>
+                <Trash2 size={16} /> Remover empresa
+              </button>
+            </div>
           )}
         </header>
 
@@ -1018,11 +1094,29 @@ export function App() {
                   <input value={settings.notes_directory} readOnly />
                   <button type="button" className="icon-button" title="Selecionar pasta" onClick={chooseNotesDirectory}><FolderOpen size={17} /></button>
                 </div>
-                <small>Novos XMLs serão organizados por CNPJ dentro desta pasta.</small>
+                <small>
+                  {settings.dominio_folder_layout_enabled
+                    ? "Novas NFS-e serão organizadas no padrão configurado para o Domínio."
+                    : "Novos XMLs serão organizados por CNPJ dentro desta pasta."}
+                </small>
               </label>
               <label className="check-row settings-check">
                 <input type="checkbox" checked={settings.notifications_enabled} onChange={(event) => setSettings((current) => ({ ...current, notifications_enabled: event.target.checked }))} />
                 <span><strong>Notificações do Windows</strong><small>Avisar quando uma sincronização for concluída.</small></span>
+              </label>
+              <label className="check-row settings-check experimental-check">
+                <input
+                  type="checkbox"
+                  checked={settings.dominio_folder_layout_enabled}
+                  onChange={(event) => setSettings((current) => ({
+                    ...current,
+                    dominio_folder_layout_enabled: event.target.checked
+                  }))}
+                />
+                <span>
+                  <strong>Organização de pastas para o Domínio <em>Experimental</em></strong>
+                  <small>Organiza novas NFS-e por empresa e mês de emissão. Configure cada empresa pela engrenagem no topo.</small>
+                </span>
               </label>
               <div className="settings-update">
                 <div className="settings-update-copy">
@@ -1072,6 +1166,86 @@ export function App() {
               </a>
             </div>
             <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button><button className="button primary">Salvar configurações</button></div>
+          </form>
+        </div>
+      )}
+
+      {dialog === "company-settings" && selected && (
+        <div className="dialog-backdrop">
+          <form className="dialog wide" onSubmit={saveCompanySettings}>
+            <div className="dialog-header">
+              <div>
+                <h2>Configurações da empresa</h2>
+                <p>{selected.legal_name} · {formatCnpj(selected.cnpj)}</p>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="company-settings-section">
+              <div className="section-heading">
+                <div>
+                  <strong>Integração com o Domínio</strong>
+                  <small>Configuração experimental e individual para esta empresa.</small>
+                </div>
+                <span className="experimental-badge">Experimental</span>
+              </div>
+              <div className="company-settings-grid">
+                <label>
+                  Código da empresa no Domínio
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={companySettings.dominio_code}
+                    onChange={(event) => setCompanySettings((current) => ({
+                      ...current,
+                      dominio_code: event.target.value
+                    }))}
+                    placeholder="XX enquanto não configurado"
+                  />
+                  <small>Deixe vazio para usar XX provisoriamente.</small>
+                </label>
+                <label>
+                  Apelido da empresa no Domínio
+                  <input
+                    type="text"
+                    value={companySettings.dominio_alias}
+                    onChange={(event) => setCompanySettings((current) => ({
+                      ...current,
+                      dominio_alias: event.target.value
+                    }))}
+                    placeholder={`EMPRESA-${selected.cnpj}`}
+                  />
+                  <small>Deixe vazio para gerar um nome único com o CNPJ.</small>
+                </label>
+              </div>
+              <div className="path-preview">
+                <span>Prévia da pasta</span>
+                <code>{`${settings.notes_directory || "Pasta das notas"}\\${companySettings.dominio_code.trim() || "XX"}-${companySettings.dominio_alias.trim() || `EMPRESA-${selected.cnpj}`}\\MMAAAA`}</code>
+              </div>
+              <div className="reorganize-panel">
+                <div>
+                  <strong>XMLs já baixados</strong>
+                  <small>A movimentação é feita somente quando você solicitar. PDFs, planilhas e eventos não são alterados.</small>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={reorganizingXmls}
+                  onClick={reorganizeDominioXmls}
+                >
+                  <RefreshCw className={reorganizingXmls ? "spinning" : ""} size={15} />
+                  {reorganizingXmls ? "Reorganizando..." : "Reorganizar XMLs existentes"}
+                </button>
+              </div>
+              {companySettingsMessage && (
+                <div className="company-settings-feedback">{companySettingsMessage}</div>
+              )}
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button>
+              <button className="button primary">Salvar configurações</button>
+            </div>
           </form>
         </div>
       )}

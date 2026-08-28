@@ -89,10 +89,13 @@ interface CompanyRecord {
   certificate_reference?: string;
   remember_certificate: number;
   last_nsu: number;
+  dominio_code?: string;
+  dominio_alias?: string;
 }
 
 interface AppSettings {
   notifications_enabled: boolean;
+  dominio_folder_layout_enabled: boolean;
 }
 
 interface UpdateDownloadProgress {
@@ -782,6 +785,17 @@ function registerIpc(): void {
   });
   ipcMain.handle("window:close", () => mainWindow?.hide());
   ipcMain.handle("companies:list", () => api("/companies"));
+  ipcMain.handle("companies:update-settings", (_event, input: {
+    cnpj: string;
+    settings: { dominio_code: string; dominio_alias: string };
+  }) => api(`/companies/${input.cnpj}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input.settings)
+  }));
+  ipcMain.handle("companies:reorganize-dominio", (_event, cnpj: string) =>
+    api(`/companies/${cnpj}/dominio/reorganize`, { method: "POST" })
+  );
   ipcMain.handle("documents:list", (_event, input) => {
     lastDocumentQueryByCompany.set(input.cnpj, {
       startDate: input.startDate || input.data_inicial,

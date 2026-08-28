@@ -9,6 +9,8 @@ export interface Company {
   last_nsu: number;
   sync_status: string;
   diagnostic?: string;
+  dominio_code?: string;
+  dominio_alias?: string;
 }
 
 export interface WindowsCertificate {
@@ -50,6 +52,19 @@ export interface SyncLog {
 export interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
+  dominio_folder_layout_enabled: boolean;
+}
+
+export interface CompanySettingsInput {
+  dominio_code: string;
+  dominio_alias: string;
+}
+
+export interface ReorganizationResult {
+  moved: number;
+  skipped: number;
+  errors: number;
+  details: string[];
 }
 
 export interface DownloadOptions {
@@ -127,6 +142,8 @@ export interface NfseApi {
     allowPartial?: boolean
   ): Promise<CompanyRegistrationResult>;
   deleteCompany(cnpj: string): Promise<{ removed: boolean }>;
+  updateCompanySettings(cnpj: string, settings: CompanySettingsInput): Promise<Company>;
+  reorganizeDominioXmls(cnpj: string): Promise<ReorganizationResult>;
   listDocuments(input: {
     cnpj: string;
     startDate?: string;

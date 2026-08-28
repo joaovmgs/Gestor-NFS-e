@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld("nfse", {
     allowPartial = false
   ) => invokeClean("companies:register-windows", { certificate, queryCnpj, allowPartial }),
   deleteCompany: (cnpj: string) => invokeClean("companies:delete", cnpj),
+  updateCompanySettings: (cnpj: string, settings: CompanySettingsInput) =>
+    invokeClean("companies:update-settings", { cnpj, settings }),
+  reorganizeDominioXmls: (cnpj: string) =>
+    invokeClean("companies:reorganize-dominio", cnpj),
   listDocuments: (input: DocumentQuery) => invokeClean("documents:list", input),
   downloadDocuments: (input: DownloadQuery) =>
     invokeClean("documents:download", input),
@@ -119,6 +123,12 @@ interface ExportQueueStatus {
 interface AppSettings {
   notes_directory: string;
   notifications_enabled: boolean;
+  dominio_folder_layout_enabled: boolean;
+}
+
+interface CompanySettingsInput {
+  dominio_code: string;
+  dominio_alias: string;
 }
 
 interface UpdateStatus {
