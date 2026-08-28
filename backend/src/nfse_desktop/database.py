@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS companies (
   remember_certificate INTEGER NOT NULL DEFAULT 0,
   certificate_reference TEXT,
   certificate_expires_at TEXT,
+  dominio_code TEXT,
+  dominio_alias TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -100,6 +102,10 @@ class Database:
                     WHERE certificate_cnpj IS NULL OR certificate_cnpj = ''
                     """
                 )
+            if "dominio_code" not in company_columns:
+                connection.execute("ALTER TABLE companies ADD COLUMN dominio_code TEXT")
+            if "dominio_alias" not in company_columns:
+                connection.execute("ALTER TABLE companies ADD COLUMN dominio_alias TEXT")
             connection.execute(
                 """
                 DELETE FROM sync_logs

@@ -31,6 +31,7 @@ class Repository:
                 (
                     ("notes_directory", default_notes_dir),
                     ("notifications_enabled", "1"),
+                    ("dominio_folder_layout_enabled", "0"),
                 ),
             )
 
@@ -43,12 +44,16 @@ class Repository:
         return {
             "notes_directory": values.get("notes_directory", ""),
             "notifications_enabled": values.get("notifications_enabled", "1") == "1",
+            "dominio_folder_layout_enabled": (
+                values.get("dominio_folder_layout_enabled", "0") == "1"
+            ),
         }
 
     def update_settings(
         self,
         notes_directory: str,
         notifications_enabled: bool,
+        dominio_folder_layout_enabled: bool = False,
     ) -> dict[str, Any]:
         with self.database.connect() as connection:
             connection.executemany(
@@ -62,9 +67,51 @@ class Repository:
                 (
                     ("notes_directory", notes_directory),
                     ("notifications_enabled", "1" if notifications_enabled else "0"),
+                    (
+                        "dominio_folder_layout_enabled",
+                        "1" if dominio_folder_layout_enabled else "0",
+                    ),
                 ),
             )
         return self.get_settings()
+
+    def update_company_settings(
+        self,
+        cnpj: str,
+        *,
+        dominio_code: str,
+        dominio_alias: str,
+    ) -> dict[str, Any] | None:
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE companies
+                SET dominio_code = ?, dominio_alias = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE cnpj = ?
+                """,
+                (dominio_code or None, dominio_alias or None, cnpj),
+            )
+        return self.get_company(cnpj) if cursor.rowcount else None
+
+    def list_company_nfse_documents(self, cnpj: str) -> list[dict[str, Any]]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, nsu, access_key, issued_at, xml_path
+                FROM documents
+                WHERE company_cnpj = ? AND document_type = 'NFSE'
+                ORDER BY id
+                """,
+                (cnpj,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_document_xml_path(self, document_id: int, xml_path: str) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                "UPDATE documents SET xml_path = ? WHERE id = ?",
+                (xml_path, document_id),
+            )
 
     def get_company(self, cnpj: str) -> dict[str, Any] | None:
         with self.database.connect() as connection:

@@ -20,6 +20,7 @@ from .config import Settings
 from .database import Database
 from .exporter import DocumentExporter
 from .repository import Repository
+from .storage import reorganize_company_xmls, validate_dominio_configuration
 from .sync import SyncService
 
 
@@ -47,6 +48,12 @@ class SyncLogPayload(BaseModel):
 class SettingsPayload(BaseModel):
     notes_directory: str
     notifications_enabled: bool
+    dominio_folder_layout_enabled: bool = False
+
+
+class CompanySettingsPayload(BaseModel):
+    dominio_code: str = ""
+    dominio_alias: str = ""
 
 
 def _requested_cnpjs(primary: str | None, batch: str | None) -> list[str | None]:
@@ -168,7 +175,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return repository.update_settings(
             notes_directory,
             payload.notifications_enabled,
+            payload.dominio_folder_layout_enabled,
         )
+
+    @app.put("/companies/{cnpj}/settings", dependencies=[Depends(authorize)])
+    def update_company_settings(cnpj: str, payload: CompanySettingsPayload):
+        code = payload.dominio_code.strip()
+        alias = payload.dominio_alias.strip()
+        try:
+            validate_dominio_configuration(code, alias, cnpj=cnpj)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        company = repository.update_company_settings(
+            cnpj,
+            dominio_code=code,
+            dominio_alias=alias,
+        )
+        if not company:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada.")
+        return company
+
+    @app.post("/companies/{cnpj}/dominio/reorganize", dependencies=[Depends(authorize)])
+    def reorganize_dominio_xmls(cnpj: str):
+        try:
+            return reorganize_company_xmls(repository, cnpj)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.post("/companies/pfx", dependencies=[Depends(authorize)])
     async def create_pfx_company(

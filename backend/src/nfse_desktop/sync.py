@@ -12,6 +12,7 @@ from gov_nfse.encoding import gzip_base64_decode_text
 from gov_nfse.errors import ServerError, TooManyRequestsError
 
 from .repository import Repository
+from .storage import document_xml_path, parse_issued_at
 
 REQUEST_DELAY_SECONDS = 5
 RATE_LIMIT_DELAY_SECONDS = 70
@@ -215,12 +216,6 @@ class SyncService:
         xml = str(getattr(document, "xml"))
         nsu = int(getattr(document, "nsu"))
         access_key = str(getattr(document, "chave_acesso") or f"nsu-{nsu}")
-        settings = self.repository.get_settings()
-        xml_dir = Path(settings["notes_directory"]) / cnpj / "xml"
-        xml_dir.mkdir(parents=True, exist_ok=True)
-        xml_path = xml_dir / f"{nsu:012d}-{access_key}.xml"
-        xml_path.write_text(xml, encoding="utf-8")
-
         if document_type == "NFSE":
             summary = summarize_nfse_xml(xml)
             direction = summary.classificar_para_cnpj(cnpj)
@@ -235,6 +230,34 @@ class SyncService:
         else:
             direction = "event"
             item = {}
+
+        settings = self.repository.get_settings()
+        company = self.repository.get_company(cnpj)
+        if not company:
+            raise ValueError("Empresa não encontrada ao salvar o XML.")
+        if (
+            settings["dominio_folder_layout_enabled"]
+            and document_type == "NFSE"
+            and parse_issued_at(item.get("issued_at")) is None
+        ):
+            self.repository.add_sync_log(
+                cnpj,
+                "warning",
+                "NFS-e sem data de emissão válida; foi usado o mês da sincronização na pasta Domínio.",
+            )
+        xml_path = document_xml_path(
+            settings["notes_directory"],
+            cnpj=cnpj,
+            nsu=nsu,
+            access_key=access_key,
+            document_type=document_type,
+            issued_at=item.get("issued_at"),
+            dominio_enabled=settings["dominio_folder_layout_enabled"],
+            dominio_code=company.get("dominio_code"),
+            dominio_alias=company.get("dominio_alias"),
+        )
+        xml_path.parent.mkdir(parents=True, exist_ok=True)
+        xml_path.write_text(xml, encoding="utf-8")
 
         self.repository.save_document(
             {
