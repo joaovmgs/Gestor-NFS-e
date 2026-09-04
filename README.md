@@ -42,7 +42,7 @@ Baixe o instalador mais recente na página de
 - Filtros por período, tipo e situação da NFS-e.
 - Download em ZIP separado por XML, PDF e notas canceladas.
 - DANFSe em PDF baseado no modelo da Nota Técnica 008.
-- Relatórios XLSX de serviços prestados e tomados com participantes, códigos tributários, alíquotas, valores e retenções.
+- Relatórios XLSX com painel-resumo e abas detalhadas de serviços prestados e tomados, incluindo participantes, códigos tributários, alíquotas, valores e retenções.
 - Certificado A1 por arquivo `.pfx`/`.p12` ou repositório do Windows.
 - Armazenamento opcional de credenciais protegido pelo Windows.
 - Banco de dados SQLite local, sem painel administrativo ou serviço externo.

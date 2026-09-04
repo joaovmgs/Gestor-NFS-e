@@ -75,6 +75,13 @@ class ReportColumn:
     width: float = 18
 
 
+@dataclass(frozen=True)
+class SummaryMetric:
+    label: str
+    value: object
+    kind: str = "count"
+
+
 COMMON_COLUMNS = (
     ReportColumn("Número da NFS-e", "numero", width=18),
     ReportColumn("Situação", "situacao", width=16),
@@ -165,9 +172,15 @@ def generate_nfse_report_xlsx(
     output_path = Path(temp_file.name)
 
     workbook = Workbook(write_only=True)
+    workbook.calculation.calcMode = "auto"
+    workbook.calculation.calcOnSave = True
+    workbook.calculation.forceFullCalc = True
+
+    summary_sheet = workbook.create_sheet("Resumo")
     sheet = workbook.create_sheet(sheet_name)
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "E9"
+    sheet.sheet_properties.tabColor = ACCENT_COLOR
 
     for index, column in enumerate(columns, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = column.width
@@ -185,9 +198,32 @@ def generate_nfse_report_xlsx(
     service_amount_column = _column_letter(columns, "valor_servicos")
     iss_amount_column = _column_letter(columns, "valor_iss")
 
-    _append_title_row(sheet, len(columns), f"RELATÓRIO DE {report_label}")
     company_name = str(company.get("legal_name") or "Empresa")
     company_cnpj = _format_tax_id(str(company.get("cnpj") or ""))
+    filters = [
+        f"Período: {_format_date(data_inicial)} a {_format_date(data_final)}",
+        f"Tipo: {'Prestados' if is_prestados else 'Tomados'}",
+    ]
+    if situacao and situacao != "todas":
+        filters.append(f"Situação: {situacao.capitalize()}")
+    if query:
+        filters.append(f"Pesquisa: {query}")
+
+    _append_dashboard(
+        summary_sheet,
+        company_name=company_name,
+        company_cnpj=company_cnpj,
+        report_label=report_label,
+        filters=filters,
+        detail_sheet_name=sheet_name,
+        columns=columns,
+        first_data_row=first_data_row,
+        last_data_row=last_data_row,
+        has_rows=has_rows,
+        is_prestados=is_prestados,
+    )
+
+    _append_title_row(sheet, len(columns), f"RELATÓRIO DE {report_label}")
     _append_info_row(sheet, len(columns), f"{company_name}  •  CNPJ {company_cnpj}")
     sheet.append([None] * len(columns))
 
@@ -216,14 +252,6 @@ def generate_nfse_report_xlsx(
     _append_summary_row(sheet, len(columns), summary_labels, values=False)
     _append_summary_row(sheet, len(columns), summary_values, values=True)
 
-    filters = [
-        f"Período: {_format_date(data_inicial)} a {_format_date(data_final)}",
-        f"Tipo: {'Prestados' if is_prestados else 'Tomados'}",
-    ]
-    if situacao and situacao != "todas":
-        filters.append(f"Situação: {situacao.capitalize()}")
-    if query:
-        filters.append(f"Pesquisa: {query}")
     _append_filter_row(sheet, len(columns), "  •  ".join(filters))
     sheet.append([None] * len(columns))
     _append_header_row(sheet, columns)
@@ -346,6 +374,290 @@ def _fallback_row(document: dict[str, object]) -> ReportRow:
         tipo_debito="",
         tipo_credito="",
     )
+
+
+def _append_dashboard(
+    sheet,
+    *,
+    company_name: str,
+    company_cnpj: str,
+    report_label: str,
+    filters: list[str],
+    detail_sheet_name: str,
+    columns: tuple[ReportColumn, ...],
+    first_data_row: int,
+    last_data_row: int,
+    has_rows: bool,
+    is_prestados: bool,
+) -> None:
+    sheet.sheet_view.showGridLines = False
+    sheet.sheet_view.zoomScale = 90
+    sheet.freeze_panes = "A6"
+    sheet.sheet_properties.tabColor = TITLE_COLOR
+    for column in ("A", "B", "C"):
+        sheet.column_dimensions[column].width = 30
+    sheet.row_dimensions[1].height = 34
+    sheet.row_dimensions[2].height = 23
+    sheet.row_dimensions[4].height = 24
+    for row in (6, 10, 14, 18):
+        sheet.row_dimensions[row].height = 24
+    for row in (8, 12, 16, 20):
+        sheet.row_dimensions[row].height = 31
+    sheet.row_dimensions[22].height = 46
+
+    _append_title_row(sheet, 3, f"RESUMO DE {report_label}")
+    _append_info_row(sheet, 3, f"{company_name}  •  CNPJ {company_cnpj}")
+    sheet.append([None, None, None])
+    _append_filter_row(sheet, 3, "  •  ".join(filters))
+    sheet.append([None, None, None])
+
+    _append_dashboard_section(sheet, "DOCUMENTOS")
+    _append_dashboard_metrics(
+        sheet,
+        [
+            SummaryMetric(
+                "Notas no relatório",
+                _detail_formula(
+                    f"COUNTA('{detail_sheet_name}'!A{first_data_row}:A{last_data_row})",
+                    has_rows,
+                ),
+            ),
+            SummaryMetric(
+                "Autorizadas",
+                _detail_formula(
+                    f'COUNTIF(\'{detail_sheet_name}\'!B{first_data_row}:B{last_data_row},'
+                    '"Autorizada")',
+                    has_rows,
+                ),
+            ),
+            SummaryMetric(
+                "Canceladas",
+                _detail_formula(
+                    f'COUNTIF(\'{detail_sheet_name}\'!B{first_data_row}:B{last_data_row},'
+                    '"Cancelada")',
+                    has_rows,
+                ),
+            ),
+        ],
+    )
+    sheet.append([None, None, None])
+
+    _append_dashboard_section(sheet, "VALORES DA NFS-e")
+    _append_dashboard_metrics(
+        sheet,
+        [
+            _sum_metric(
+                "Valor dos serviços",
+                detail_sheet_name,
+                columns,
+                "valor_servicos",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "Base de cálculo do ISS",
+                detail_sheet_name,
+                columns,
+                "base_calculo_iss",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "Valor líquido",
+                detail_sheet_name,
+                columns,
+                "valor_liquido",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+        ],
+    )
+    sheet.append([None, None, None])
+
+    _append_dashboard_section(sheet, "TRIBUTOS")
+    _append_dashboard_metrics(
+        sheet,
+        [
+            _sum_metric(
+                "Valor do ISS",
+                detail_sheet_name,
+                columns,
+                "valor_iss",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "Valor IBS",
+                detail_sheet_name,
+                columns,
+                "valor_ibs",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "Valor CBS",
+                detail_sheet_name,
+                columns,
+                "valor_cbs",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+        ],
+    )
+    sheet.append([None, None, None])
+
+    _append_dashboard_section(
+        sheet,
+        "APURAÇÃO PRÓPRIA" if is_prestados else "RETENÇÕES FEDERAIS",
+    )
+    if is_prestados:
+        extra_metrics = [
+            _sum_metric(
+                "PIS – débito/apuração própria",
+                detail_sheet_name,
+                columns,
+                "pis_debito",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "COFINS – débito/apuração própria",
+                detail_sheet_name,
+                columns,
+                "cofins_debito",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            SummaryMetric(
+                "Total PIS + COFINS",
+                "=SUM(A20:B20)" if has_rows else 0,
+                "currency",
+            ),
+        ]
+    else:
+        extra_metrics = [
+            _sum_metric(
+                label,
+                detail_sheet_name,
+                columns,
+                field,
+                first_data_row,
+                last_data_row,
+                has_rows,
+            )
+            for label, field in (
+                ("IRRF retido", "irrf_retido"),
+                ("CSLL retida", "csll_retida"),
+                (
+                    "Contribuição previdenciária retida",
+                    "contribuicao_previdenciaria_retida",
+                ),
+            )
+        ]
+    _append_dashboard_metrics(sheet, extra_metrics)
+    sheet.append([None, None, None])
+
+    detail_notes = (
+        [
+            "Abra a aba Serviços Prestados para consultar cada NFS-e.",
+            "Códigos nacional/municipal, descrição do serviço e NBS.",
+            "Alíquotas e valores de ISS, IBS, CBS, PIS e COFINS.",
+        ]
+        if is_prestados
+        else [
+            "Abra a aba Serviços Tomados para consultar cada NFS-e.",
+            "Chave, CNPJ, razão social do prestador e data de emissão.",
+            "Códigos tributários, descrição do serviço, valores e retenções.",
+        ]
+    )
+    _append_dashboard_note(sheet, detail_notes)
+
+    sheet.print_area = "A1:C26"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 1
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.oddFooter.center.text = "Página &P de &N"
+    sheet.oddFooter.right.text = datetime.now().strftime("Gerado em %d/%m/%Y %H:%M")
+
+
+def _append_dashboard_section(sheet, title: str) -> None:
+    cells = []
+    for index in range(3):
+        cell = WriteOnlyCell(sheet, value=title if index == 0 else None)
+        cell.fill = PatternFill("solid", fgColor=ACCENT_COLOR)
+        cell.font = Font(name="Aptos", size=10, bold=True, color="FFFFFF")
+        cell.alignment = Alignment(vertical="center")
+        cells.append(cell)
+    sheet.append(cells)
+
+
+def _append_dashboard_metrics(sheet, metrics: list[SummaryMetric]) -> None:
+    labels = []
+    values = []
+    border_color = Side(style="thin", color="99F6E4")
+    for index in range(3):
+        metric = metrics[index] if index < len(metrics) else None
+        label_cell = WriteOnlyCell(sheet, value=metric.label if metric else None)
+        value_cell = WriteOnlyCell(sheet, value=metric.value if metric else None)
+        if metric:
+            label_cell.fill = PatternFill("solid", fgColor="F0FDFA")
+            label_cell.border = Border(top=border_color)
+            label_cell.font = Font(name="Aptos", size=9, bold=True, color=MUTED_COLOR)
+            label_cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+            value_cell.fill = PatternFill("solid", fgColor=ACCENT_LIGHT)
+            value_cell.border = Border(bottom=border_color)
+            value_cell.font = Font(name="Aptos Display", size=16, bold=True, color=ACCENT_COLOR)
+            value_cell.alignment = Alignment(vertical="center")
+            value_cell.number_format = MONEY_FORMAT if metric.kind == "currency" else "#,##0"
+        labels.append(label_cell)
+        values.append(value_cell)
+    sheet.append(labels)
+    sheet.append(values)
+
+
+def _append_dashboard_note(sheet, notes: list[str]) -> None:
+    cells = []
+    for index in range(3):
+        cell = WriteOnlyCell(sheet, value=notes[index])
+        cell.fill = PatternFill("solid", fgColor="E2E8F0")
+        cell.font = Font(name="Aptos", size=9, italic=True, color=TEXT_COLOR)
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+        cells.append(cell)
+    sheet.append(cells)
+
+
+def _sum_metric(
+    label: str,
+    sheet_name: str,
+    columns: tuple[ReportColumn, ...],
+    field: str,
+    first_data_row: int,
+    last_data_row: int,
+    has_rows: bool,
+) -> SummaryMetric:
+    column = _column_letter(columns, field)
+    return SummaryMetric(
+        label,
+        _detail_formula(
+            f"SUM('{sheet_name}'!{column}{first_data_row}:{column}{last_data_row})",
+            has_rows,
+        ),
+        "currency",
+    )
+
+
+def _detail_formula(expression: str, has_rows: bool) -> object:
+    return f"={expression}" if has_rows else 0
 
 
 def _append_title_row(sheet, column_count: int, title: str) -> None:

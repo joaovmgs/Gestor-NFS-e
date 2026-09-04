@@ -978,7 +978,7 @@ export function App() {
                   checked={downloadOptions.includeXlsx}
                   onChange={(event) => setDownloadOptions((current) => ({ ...current, includeXlsx: event.target.checked }))}
                 />
-                <span><strong>Relatório fiscal XLSX</strong><small>Planilha detalhada de serviços prestados ou tomados, com códigos tributários, alíquotas, valores e retenções.</small></span>
+                <span><strong>Relatório fiscal XLSX</strong><small>Planilha com painel-resumo e detalhes de serviços prestados ou tomados, incluindo códigos tributários, alíquotas, valores e retenções.</small></span>
               </label>
             </div>
 

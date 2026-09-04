@@ -165,6 +165,21 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
                 BytesIO(archive.read("relatorio-servicos-prestados.xlsx")),
                 data_only=False,
             )
+            assert workbook.sheetnames == ["Resumo", "Serviços Prestados"]
+            summary = workbook["Resumo"]
+            assert summary["A1"].value == "RESUMO DE SERVIÇOS PRESTADOS"
+            assert summary["A8"].value == "=COUNTA('Serviços Prestados'!A9:A10)"
+            assert summary["B8"].value == '=COUNTIF(\'Serviços Prestados\'!B9:B10,"Autorizada")'
+            assert summary["C8"].value == '=COUNTIF(\'Serviços Prestados\'!B9:B10,"Cancelada")'
+            assert summary["A12"].value == "=SUM('Serviços Prestados'!L9:L10)"
+            assert summary["B12"].value == "=SUM('Serviços Prestados'!N9:N10)"
+            assert summary["C12"].value == "=SUM('Serviços Prestados'!X9:X10)"
+            assert summary["A16"].value == "=SUM('Serviços Prestados'!O9:O10)"
+            assert summary["B16"].value == "=SUM('Serviços Prestados'!T9:T10)"
+            assert summary["C16"].value == "=SUM('Serviços Prestados'!U9:U10)"
+            assert summary["A20"].value == "=SUM('Serviços Prestados'!V9:V10)"
+            assert summary["B20"].value == "=SUM('Serviços Prestados'!W9:W10)"
+            assert summary["C20"].value == "=SUM(A20:B20)"
             sheet = workbook["Serviços Prestados"]
             assert sheet["A1"].value == "RELATÓRIO DE SERVIÇOS PRESTADOS"
             assert sheet["A8"].value == "Número da NFS-e"
@@ -299,6 +314,13 @@ def test_received_services_report_includes_provider_and_taxation(tmp_path) -> No
 
     try:
         workbook = load_workbook(report_path, data_only=False)
+        assert workbook.sheetnames == ["Resumo", "Serviços Tomados"]
+        summary = workbook["Resumo"]
+        assert summary["A1"].value == "RESUMO DE SERVIÇOS TOMADOS"
+        assert summary["A12"].value == "=SUM('Serviços Tomados'!K9:K9)"
+        assert summary["A20"].value == "=SUM('Serviços Tomados'!P9:P9)"
+        assert summary["B20"].value == "=SUM('Serviços Tomados'!Q9:Q9)"
+        assert summary["C20"].value == "=SUM('Serviços Tomados'!R9:R9)"
         sheet = workbook["Serviços Tomados"]
         assert sheet["A1"].value == "RELATÓRIO DE SERVIÇOS TOMADOS"
         assert sheet["C9"].value == "35503081223412247000110000000600272226088748364133"
