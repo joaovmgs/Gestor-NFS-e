@@ -50,9 +50,9 @@ Baixe o instalador mais recente na página de
 ## DANFSe v2.0
 
 O gerador de PDF deste projeto utiliza o layout **DANFSe v2.0** e foi
-desenvolvido com base nas especificações da
-[Nota Técnica nº 008 - Especificações Técnicas do DANFSe](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/nt-008-se-cgnfse-danfse-20260505.pdf),
-publicada pela SE/CGNFS-e.
+desenvolvido com base na versão 1.02 da
+[Nota Técnica nº 008 - Especificações Técnicas do DANFSe](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc/nt-008-se-cgnfse-danfse-20260714-v1-02.pdf),
+publicada pela SE/CGNFS-e em 14 de julho de 2026.
 
 Esta implementação ainda está em processo de homologação. Podem existir
 alterações futuras na documentação oficial, diferenças pontuais de
