@@ -11,6 +11,7 @@ from gov_nfse import Ambiente, NfseClient, summarize_nfse_xml
 from gov_nfse.encoding import gzip_base64_decode_text
 from gov_nfse.errors import ServerError, TooManyRequestsError
 
+from .certificates import inspect_pfx, resolve_consulted_cnpj
 from .repository import Repository
 
 REQUEST_DELAY_SECONDS = 5
@@ -27,6 +28,19 @@ class SyncService:
         company = self.repository.get_company(cnpj)
         if not company:
             raise ValueError("Empresa nao encontrada.")
+
+        try:
+            certificate_info = inspect_pfx(pfx, password)
+            resolve_consulted_cnpj(certificate_info.cnpj, cnpj)
+        except ValueError as exc:
+            diagnostic = f"CERTIFICADO | {str(exc)[:500]}"
+            self.repository.set_sync_state(cnpj, status="error", diagnostic=diagnostic)
+            return {"ok": False, "diagnostic": diagnostic, "downloaded": 0}
+        self.repository.update_certificate_metadata(
+            cnpj,
+            certificate_cnpj=certificate_info.cnpj,
+            certificate_expires_at=certificate_info.expires_at,
+        )
 
         current_nsu = max(0, int(company["last_nsu"] or 0) - 50)
         self.repository.set_sync_state(

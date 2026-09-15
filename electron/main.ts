@@ -25,6 +25,7 @@ import {
   resolveDownloadQuery
 } from "./download-query.js";
 import {
+  validateStoredCertificate,
   validateWindowsCertificate,
   WindowsCertificate
 } from "./certificate-validation.js";
@@ -87,6 +88,9 @@ interface CompanyRecord {
   certificate_source: "pfx" | "windows";
   certificate_cnpj?: string;
   certificate_reference?: string;
+  certificate_expires_at: string;
+  certificate_status?: "valid" | "expired" | "invalid";
+  certificate_message?: string;
   remember_certificate: number;
   last_nsu: number;
 }
@@ -558,8 +562,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
     } catch (error) {
       const detail = error as Error & { stderr?: string };
       const errorMessage = detail.stderr?.trim() || detail.message;
-      if (errorMessage.toLocaleLowerCase("pt-BR").includes("certificado nao encontrado")) {
-        await addSyncLog(company.cnpj, "error", errorMessage);
+      if (isPermanentSyncError(errorMessage)) {
         throw new Error(errorMessage);
       }
 
@@ -643,6 +646,7 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
     const companies = await api<CompanyRecord[]>("/companies");
     company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
+    validateStoredCertificate(company);
 
     const downloaded = company.certificate_source === "windows"
       ? await synchronizeWindowsCompany(company)
@@ -682,6 +686,14 @@ function isPermanentSyncError(message: string): boolean {
     "certificado nao encontrado",
     "certificado não encontrado",
     "certificado vencido",
+    "certificado digital esta vencido",
+    "certificado digital está vencido",
+    "certificado do windows ainda nao esta valido",
+    "certificado do windows ainda não está válido",
+    "data de vencimento do certificado",
+    "pfx corrompido",
+    "chave privada",
+    "cnpj do certificado",
     "senha incorreta",
     "informe a senha"
   ].some((fragment) => normalized.includes(fragment));
@@ -938,7 +950,11 @@ function registerIpc(): void {
     await removeCredential(cnpj);
     return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
-  ipcMain.handle("companies:sync", (_event, input: SyncRequest) => {
+  ipcMain.handle("companies:sync", async (_event, input: SyncRequest) => {
+    const companies = await api<CompanyRecord[]>("/companies");
+    const company = companies.find((item) => item.cnpj === input.cnpj);
+    if (!company) throw new Error("Empresa nao encontrada.");
+    validateStoredCertificate(company);
     cancelScheduledSyncRetry(input.cnpj);
     const snapshot = syncQueue.snapshot();
     if (snapshot.activeId === input.cnpj || snapshot.pendingIds.includes(input.cnpj)) {
