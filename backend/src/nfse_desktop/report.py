@@ -16,7 +16,7 @@ from danfse_brasil import parse_danfse
 from danfse_brasil.exceptions import InvalidNFSeXmlError
 from danfse_brasil.models import MISSING_VALUE
 
-MONEY_FORMAT = 'R$ #,##0.00;[Red]-R$ #,##0.00'
+MONEY_FORMAT = "R$ #,##0.00;[Red]-R$ #,##0.00"
 PERCENT_FORMAT = "0.00%"
 DATE_FORMAT = "dd/mm/yyyy"
 TEXT_COLOR = "172033"
@@ -45,10 +45,17 @@ class ReportRow:
     descricao_servico: str
     codigo_nbs: str
     valor_servicos: Decimal | None
+    desconto_incondicionado: Decimal | None
+    desconto_condicionado: Decimal | None
+    total_descontos: Decimal | None
+    total_retencoes: Decimal | None
+    valor_liquido: Decimal | None
     aliquota_iss: Decimal | None
     base_calculo_iss: Decimal | None
     valor_iss: Decimal | None
     retencao_iss: str
+    valor_iss_retido: Decimal | None
+    valor_iss_nao_retido: Decimal | None
     irrf_retido: Decimal | None
     csll_retida: Decimal | None
     contribuicao_previdenciaria_retida: Decimal | None
@@ -61,7 +68,6 @@ class ReportRow:
     ajuste_cbs: Decimal | None
     pis_debito: Decimal | None
     cofins_debito: Decimal | None
-    valor_liquido: Decimal | None
     finalidade_nfse: str
     tipo_debito: str
     tipo_credito: str
@@ -97,10 +103,17 @@ TOMADOS_COLUMNS = COMMON_COLUMNS + (
     ReportColumn("Descrição da tributação", "descricao_tributacao", width=48),
     ReportColumn("Descrição do serviço", "descricao_servico", width=52),
     ReportColumn("Valor dos serviços", "valor_servicos", "currency", 20),
+    ReportColumn("Desconto incondicionado", "desconto_incondicionado", "currency", 23),
+    ReportColumn("Desconto condicionado", "desconto_condicionado", "currency", 22),
+    ReportColumn("Total de descontos", "total_descontos", "currency", 20),
+    ReportColumn("Total de retenções", "total_retencoes", "currency", 20),
+    ReportColumn("Valor líquido", "valor_liquido", "currency", 20),
     ReportColumn("Alíquota do ISS", "aliquota_iss", "percent", 17),
     ReportColumn("Base de cálculo do ISS", "base_calculo_iss", "currency", 22),
     ReportColumn("Valor do ISS", "valor_iss", "currency", 18),
     ReportColumn("Retenção do ISS", "retencao_iss", width=24),
+    ReportColumn("ISS retido", "valor_iss_retido", "currency", 18),
+    ReportColumn("ISS não retido", "valor_iss_nao_retido", "currency", 18),
     ReportColumn("IRRF retido", "irrf_retido", "currency", 18),
     ReportColumn("CSLL retida", "csll_retida", "currency", 18),
     ReportColumn(
@@ -113,7 +126,13 @@ TOMADOS_COLUMNS = COMMON_COLUMNS + (
     ReportColumn("Valor CBS", "valor_cbs", "currency", 18),
     ReportColumn("Ajuste IBS", "ajuste_ibs", "currency", 18),
     ReportColumn("Ajuste CBS", "ajuste_cbs", "currency", 18),
-    ReportColumn("Valor líquido", "valor_liquido", "currency", 20),
+    ReportColumn("Valor do PIS – débito/apuração própria", "pis_debito", "currency", 32),
+    ReportColumn(
+        "Valor da COFINS – débito/apuração própria",
+        "cofins_debito",
+        "currency",
+        34,
+    ),
     ReportColumn("Finalidade da NFS-e", "finalidade_nfse", width=28),
     ReportColumn("Tipo de débito", "tipo_debito", width=30),
     ReportColumn("Tipo de crédito", "tipo_credito", width=30),
@@ -128,15 +147,32 @@ PRESTADOS_COLUMNS = COMMON_COLUMNS + (
     ReportColumn("Descrição do serviço", "descricao_servico", width=52),
     ReportColumn("Código NBS", "codigo_nbs", width=20),
     ReportColumn("Valor dos serviços", "valor_servicos", "currency", 20),
+    ReportColumn("Desconto incondicionado", "desconto_incondicionado", "currency", 23),
+    ReportColumn("Desconto condicionado", "desconto_condicionado", "currency", 22),
+    ReportColumn("Total de descontos", "total_descontos", "currency", 20),
+    ReportColumn("Total de retenções", "total_retencoes", "currency", 20),
+    ReportColumn("Valor líquido", "valor_liquido", "currency", 20),
     ReportColumn("Alíquota do ISS", "aliquota_iss", "percent", 17),
     ReportColumn("Base de cálculo do ISS", "base_calculo_iss", "currency", 22),
     ReportColumn("Valor do ISS", "valor_iss", "currency", 18),
     ReportColumn("Retenção do ISS", "retencao_iss", width=24),
+    ReportColumn("ISS retido", "valor_iss_retido", "currency", 18),
+    ReportColumn("ISS não retido", "valor_iss_nao_retido", "currency", 18),
+    ReportColumn("IRRF retido", "irrf_retido", "currency", 18),
+    ReportColumn("CSLL retida", "csll_retida", "currency", 18),
+    ReportColumn(
+        "Contribuição previdenciária retida",
+        "contribuicao_previdenciaria_retida",
+        "currency",
+        30,
+    ),
     ReportColumn("Alíquota IBS UF", "aliquota_ibs_uf", "percent", 18),
     ReportColumn("Alíquota IBS Municipal", "aliquota_ibs_municipal", "percent", 22),
     ReportColumn("Alíquota CBS", "aliquota_cbs", "percent", 18),
     ReportColumn("Valor IBS", "valor_ibs", "currency", 18),
     ReportColumn("Valor CBS", "valor_cbs", "currency", 18),
+    ReportColumn("Ajuste IBS", "ajuste_ibs", "currency", 18),
+    ReportColumn("Ajuste CBS", "ajuste_cbs", "currency", 18),
     ReportColumn("Valor do PIS – débito/apuração própria", "pis_debito", "currency", 32),
     ReportColumn(
         "Valor da COFINS – débito/apuração própria",
@@ -144,7 +180,6 @@ PRESTADOS_COLUMNS = COMMON_COLUMNS + (
         "currency",
         34,
     ),
-    ReportColumn("Valor líquido", "valor_liquido", "currency", 20),
     ReportColumn("Finalidade da NFS-e", "finalidade_nfse", width=28),
     ReportColumn("Tipo de débito", "tipo_debito", width=30),
     ReportColumn("Tipo de crédito", "tipo_credito", width=30),
@@ -229,7 +264,7 @@ def generate_nfse_report_xlsx(
 
     summary_labels = ["Notas", "Autorizadas", "Canceladas", "Valor dos serviços", "Valor do ISS"]
     summary_values: list[object] = [
-        _summary_formula(f'=SUBTOTAL(103,A{first_data_row}:A{last_data_row})', has_rows),
+        _summary_formula(f"=SUBTOTAL(103,A{first_data_row}:A{last_data_row})", has_rows),
         _summary_formula(
             f'=COUNTIF(B{first_data_row}:B{last_data_row},"Autorizada")',
             has_rows,
@@ -291,6 +326,11 @@ def _report_row(document: dict[str, object]) -> ReportRow:
 
     national_code, municipal_code = _split_taxation_code(data.service.taxation_code)
     ibs_uf_rate, ibs_municipal_rate = _split_rates(data.ibs_cbs_taxation.ibs_rates)
+    desconto_incondicionado = _decimal_or_none(data.total.unconditional_discount)
+    desconto_condicionado = _decimal_or_none(data.total.conditional_discount)
+    valor_iss = _decimal_or_none(data.municipal_taxation.issqn_amount)
+    retencao_iss = _blank_if_missing(data.municipal_taxation.retention)
+    valor_iss_retido, valor_iss_nao_retido = _split_iss_amount(valor_iss, retencao_iss)
     return ReportRow(
         numero=_present(data.header.nfse_number, fallback.numero),
         situacao=fallback.situacao,
@@ -309,10 +349,23 @@ def _report_row(document: dict[str, object]) -> ReportRow:
             data.total.service_amount,
             fallback.valor_servicos,
         ),
+        desconto_incondicionado=desconto_incondicionado,
+        desconto_condicionado=desconto_condicionado,
+        total_descontos=_sum_present(
+            desconto_incondicionado,
+            desconto_condicionado,
+        ),
+        total_retencoes=_decimal_or_none(data.total.total_retentions),
+        valor_liquido=_decimal_with_fallback(
+            data.total.nfse_net_amount,
+            fallback.valor_liquido,
+        ),
         aliquota_iss=_percentage_or_none(data.municipal_taxation.applied_rate),
         base_calculo_iss=_decimal_or_none(data.municipal_taxation.issqn_base),
-        valor_iss=_decimal_or_none(data.municipal_taxation.issqn_amount),
-        retencao_iss=_blank_if_missing(data.municipal_taxation.retention),
+        valor_iss=valor_iss,
+        retencao_iss=retencao_iss,
+        valor_iss_retido=valor_iss_retido,
+        valor_iss_nao_retido=valor_iss_nao_retido,
         irrf_retido=_decimal_or_none(data.federal_taxation.irrf),
         csll_retida=_decimal_or_none(data.federal_taxation.sociais_retidas),
         contribuicao_previdenciaria_retida=_decimal_or_none(
@@ -327,10 +380,6 @@ def _report_row(document: dict[str, object]) -> ReportRow:
         ajuste_cbs=_decimal_or_none(data.ibs_cbs_taxation.adjustment_cbs),
         pis_debito=_decimal_or_none(data.federal_taxation.pis_debito),
         cofins_debito=_decimal_or_none(data.federal_taxation.cofins_debito),
-        valor_liquido=_decimal_with_fallback(
-            data.total.nfse_net_amount,
-            fallback.valor_liquido,
-        ),
         finalidade_nfse=_blank_if_missing(data.header.purpose),
         tipo_debito=_blank_if_missing(data.header.debit_note_type),
         tipo_credito=_blank_if_missing(data.header.credit_note_type),
@@ -353,10 +402,17 @@ def _fallback_row(document: dict[str, object]) -> ReportRow:
         descricao_servico="",
         codigo_nbs="",
         valor_servicos=_decimal_or_none(document.get("service_amount")),
+        desconto_incondicionado=None,
+        desconto_condicionado=None,
+        total_descontos=None,
+        total_retencoes=None,
+        valor_liquido=_decimal_or_none(document.get("net_amount")),
         aliquota_iss=None,
         base_calculo_iss=None,
         valor_iss=None,
         retencao_iss="",
+        valor_iss_retido=None,
+        valor_iss_nao_retido=None,
         irrf_retido=None,
         csll_retida=None,
         contribuicao_previdenciaria_retida=None,
@@ -369,7 +425,6 @@ def _fallback_row(document: dict[str, object]) -> ReportRow:
         ajuste_cbs=None,
         pis_debito=None,
         cofins_debito=None,
-        valor_liquido=_decimal_or_none(document.get("net_amount")),
         finalidade_nfse="",
         tipo_debito="",
         tipo_credito="",
@@ -390,28 +445,29 @@ def _append_dashboard(
     has_rows: bool,
     is_prestados: bool,
 ) -> None:
+    dashboard_columns = 4
     sheet.sheet_view.showGridLines = False
     sheet.sheet_view.zoomScale = 90
     sheet.freeze_panes = "A6"
     sheet.sheet_properties.tabColor = TITLE_COLOR
-    for column in ("A", "B", "C"):
-        sheet.column_dimensions[column].width = 30
+    for column in ("A", "B", "C", "D"):
+        sheet.column_dimensions[column].width = 27
     sheet.row_dimensions[1].height = 34
     sheet.row_dimensions[2].height = 23
     sheet.row_dimensions[4].height = 24
-    for row in (6, 10, 14, 18):
+    for row in (6, 10, 14, 18, 22):
         sheet.row_dimensions[row].height = 24
-    for row in (8, 12, 16, 20):
+    for row in (8, 12, 16, 20, 24):
         sheet.row_dimensions[row].height = 31
-    sheet.row_dimensions[22].height = 46
+    sheet.row_dimensions[26].height = 46
 
-    _append_title_row(sheet, 3, f"RESUMO DE {report_label}")
-    _append_info_row(sheet, 3, f"{company_name}  •  CNPJ {company_cnpj}")
-    sheet.append([None, None, None])
-    _append_filter_row(sheet, 3, "  •  ".join(filters))
-    sheet.append([None, None, None])
+    _append_title_row(sheet, dashboard_columns, f"RESUMO DE {report_label}")
+    _append_info_row(sheet, dashboard_columns, f"{company_name}  •  CNPJ {company_cnpj}")
+    sheet.append([None] * dashboard_columns)
+    _append_filter_row(sheet, dashboard_columns, "  •  ".join(filters))
+    sheet.append([None] * dashboard_columns)
 
-    _append_dashboard_section(sheet, "DOCUMENTOS")
+    _append_dashboard_section(sheet, "DOCUMENTOS", dashboard_columns)
     _append_dashboard_metrics(
         sheet,
         [
@@ -425,7 +481,7 @@ def _append_dashboard(
             SummaryMetric(
                 "Autorizadas",
                 _detail_formula(
-                    f'COUNTIF(\'{detail_sheet_name}\'!B{first_data_row}:B{last_data_row},'
+                    f"COUNTIF('{detail_sheet_name}'!B{first_data_row}:B{last_data_row},"
                     '"Autorizada")',
                     has_rows,
                 ),
@@ -433,16 +489,17 @@ def _append_dashboard(
             SummaryMetric(
                 "Canceladas",
                 _detail_formula(
-                    f'COUNTIF(\'{detail_sheet_name}\'!B{first_data_row}:B{last_data_row},'
+                    f"COUNTIF('{detail_sheet_name}'!B{first_data_row}:B{last_data_row},"
                     '"Cancelada")',
                     has_rows,
                 ),
             ),
         ],
+        dashboard_columns,
     )
-    sheet.append([None, None, None])
+    sheet.append([None] * dashboard_columns)
 
-    _append_dashboard_section(sheet, "VALORES DA NFS-e")
+    _append_dashboard_section(sheet, "RESUMO DE TOTAIS", dashboard_columns)
     _append_dashboard_metrics(
         sheet,
         [
@@ -456,10 +513,19 @@ def _append_dashboard(
                 has_rows,
             ),
             _sum_metric(
-                "Base de cálculo do ISS",
+                "Total de retenções",
                 detail_sheet_name,
                 columns,
-                "base_calculo_iss",
+                "total_retencoes",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "Descontos",
+                detail_sheet_name,
+                columns,
+                "total_descontos",
                 first_data_row,
                 last_data_row,
                 has_rows,
@@ -474,22 +540,100 @@ def _append_dashboard(
                 has_rows,
             ),
         ],
+        dashboard_columns,
     )
-    sheet.append([None, None, None])
+    sheet.append([None] * dashboard_columns)
 
-    _append_dashboard_section(sheet, "TRIBUTOS")
+    _append_dashboard_section(sheet, "RESUMO DE RETENÇÕES", dashboard_columns)
     _append_dashboard_metrics(
         sheet,
         [
             _sum_metric(
-                "Valor do ISS",
+                "Contribuição previdenciária",
                 detail_sheet_name,
                 columns,
-                "valor_iss",
+                "contribuicao_previdenciaria_retida",
                 first_data_row,
                 last_data_row,
                 has_rows,
             ),
+            _sum_metric(
+                "IRRF",
+                detail_sheet_name,
+                columns,
+                "irrf_retido",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "PIS/COFINS/CSLL",
+                detail_sheet_name,
+                columns,
+                "csll_retida",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "ISS retido",
+                detail_sheet_name,
+                columns,
+                "valor_iss_retido",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+        ],
+        dashboard_columns,
+    )
+    sheet.append([None] * dashboard_columns)
+
+    _append_dashboard_section(sheet, "RESUMO DE IMPOSTOS", dashboard_columns)
+    _append_dashboard_metrics(
+        sheet,
+        [
+            _sum_metric(
+                "ISS não retido",
+                detail_sheet_name,
+                columns,
+                "valor_iss_nao_retido",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "PIS – apuração própria",
+                detail_sheet_name,
+                columns,
+                "pis_debito",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            _sum_metric(
+                "COFINS – apuração própria",
+                detail_sheet_name,
+                columns,
+                "cofins_debito",
+                first_data_row,
+                last_data_row,
+                has_rows,
+            ),
+            SummaryMetric(
+                "Total PIS + COFINS",
+                "=SUM(B20:C20)" if has_rows else 0,
+                "currency",
+            ),
+        ],
+        dashboard_columns,
+    )
+    sheet.append([None] * dashboard_columns)
+
+    _append_dashboard_section(sheet, "REFORMA TRIBUTÁRIA", dashboard_columns)
+    _append_dashboard_metrics(
+        sheet,
+        [
             _sum_metric(
                 "Valor IBS",
                 detail_sheet_name,
@@ -508,67 +652,30 @@ def _append_dashboard(
                 last_data_row,
                 has_rows,
             ),
-        ],
-    )
-    sheet.append([None, None, None])
-
-    _append_dashboard_section(
-        sheet,
-        "APURAÇÃO PRÓPRIA" if is_prestados else "RETENÇÕES FEDERAIS",
-    )
-    if is_prestados:
-        extra_metrics = [
-            _sum_metric(
-                "PIS – débito/apuração própria",
-                detail_sheet_name,
-                columns,
-                "pis_debito",
-                first_data_row,
-                last_data_row,
-                has_rows,
-            ),
-            _sum_metric(
-                "COFINS – débito/apuração própria",
-                detail_sheet_name,
-                columns,
-                "cofins_debito",
-                first_data_row,
-                last_data_row,
-                has_rows,
-            ),
             SummaryMetric(
-                "Total PIS + COFINS",
-                "=SUM(A20:B20)" if has_rows else 0,
+                "Total IBS + CBS",
+                "=SUM(A24:B24)" if has_rows else 0,
                 "currency",
             ),
-        ]
-    else:
-        extra_metrics = [
-            _sum_metric(
-                label,
+            _sum_fields_metric(
+                "Ajustes IBS/CBS",
                 detail_sheet_name,
                 columns,
-                field,
+                ("ajuste_ibs", "ajuste_cbs"),
                 first_data_row,
                 last_data_row,
                 has_rows,
-            )
-            for label, field in (
-                ("IRRF retido", "irrf_retido"),
-                ("CSLL retida", "csll_retida"),
-                (
-                    "Contribuição previdenciária retida",
-                    "contribuicao_previdenciaria_retida",
-                ),
-            )
-        ]
-    _append_dashboard_metrics(sheet, extra_metrics)
-    sheet.append([None, None, None])
+            ),
+        ],
+        dashboard_columns,
+    )
+    sheet.append([None] * dashboard_columns)
 
     detail_notes = (
         [
             "Abra a aba Serviços Prestados para consultar cada NFS-e.",
             "Códigos nacional/municipal, descrição do serviço e NBS.",
+            "Descontos, retenções e valor líquido por nota.",
             "Alíquotas e valores de ISS, IBS, CBS, PIS e COFINS.",
         ]
         if is_prestados
@@ -576,11 +683,12 @@ def _append_dashboard(
             "Abra a aba Serviços Tomados para consultar cada NFS-e.",
             "Chave, CNPJ, razão social do prestador e data de emissão.",
             "Códigos tributários, descrição do serviço, valores e retenções.",
+            "Descontos, ISS retido/não retido e apuração própria.",
         ]
     )
-    _append_dashboard_note(sheet, detail_notes)
+    _append_dashboard_note(sheet, detail_notes, dashboard_columns)
 
-    sheet.print_area = "A1:C26"
+    sheet.print_area = "A1:D26"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 1
@@ -589,9 +697,9 @@ def _append_dashboard(
     sheet.oddFooter.right.text = datetime.now().strftime("Gerado em %d/%m/%Y %H:%M")
 
 
-def _append_dashboard_section(sheet, title: str) -> None:
+def _append_dashboard_section(sheet, title: str, column_count: int) -> None:
     cells = []
-    for index in range(3):
+    for index in range(column_count):
         cell = WriteOnlyCell(sheet, value=title if index == 0 else None)
         cell.fill = PatternFill("solid", fgColor=ACCENT_COLOR)
         cell.font = Font(name="Aptos", size=10, bold=True, color="FFFFFF")
@@ -600,11 +708,15 @@ def _append_dashboard_section(sheet, title: str) -> None:
     sheet.append(cells)
 
 
-def _append_dashboard_metrics(sheet, metrics: list[SummaryMetric]) -> None:
+def _append_dashboard_metrics(
+    sheet,
+    metrics: list[SummaryMetric],
+    column_count: int,
+) -> None:
     labels = []
     values = []
     border_color = Side(style="thin", color="99F6E4")
-    for index in range(3):
+    for index in range(column_count):
         metric = metrics[index] if index < len(metrics) else None
         label_cell = WriteOnlyCell(sheet, value=metric.label if metric else None)
         value_cell = WriteOnlyCell(sheet, value=metric.value if metric else None)
@@ -625,10 +737,10 @@ def _append_dashboard_metrics(sheet, metrics: list[SummaryMetric]) -> None:
     sheet.append(values)
 
 
-def _append_dashboard_note(sheet, notes: list[str]) -> None:
+def _append_dashboard_note(sheet, notes: list[str], column_count: int) -> None:
     cells = []
-    for index in range(3):
-        cell = WriteOnlyCell(sheet, value=notes[index])
+    for index in range(column_count):
+        cell = WriteOnlyCell(sheet, value=notes[index] if index < len(notes) else None)
         cell.fill = PatternFill("solid", fgColor="E2E8F0")
         cell.font = Font(name="Aptos", size=9, italic=True, color=TEXT_COLOR)
         cell.alignment = Alignment(vertical="center", wrap_text=True)
@@ -652,6 +764,27 @@ def _sum_metric(
             f"SUM('{sheet_name}'!{column}{first_data_row}:{column}{last_data_row})",
             has_rows,
         ),
+        "currency",
+    )
+
+
+def _sum_fields_metric(
+    label: str,
+    sheet_name: str,
+    columns: tuple[ReportColumn, ...],
+    fields: tuple[str, ...],
+    first_data_row: int,
+    last_data_row: int,
+    has_rows: bool,
+) -> SummaryMetric:
+    ranges = [
+        f"'{sheet_name}'!{_column_letter(columns, field)}{first_data_row}:"
+        f"{_column_letter(columns, field)}{last_data_row}"
+        for field in fields
+    ]
+    return SummaryMetric(
+        label,
+        _detail_formula(f"SUM({','.join(ranges)})", has_rows),
         "currency",
     )
 
@@ -862,6 +995,25 @@ def _decimal_with_fallback(value: object, fallback: Decimal | None) -> Decimal |
     return fallback if decimal is None else decimal
 
 
+def _sum_present(*values: Decimal | None) -> Decimal | None:
+    present = [value for value in values if value is not None]
+    return sum(present, Decimal("0")) if present else None
+
+
+def _split_iss_amount(
+    amount: Decimal | None,
+    retention: str,
+) -> tuple[Decimal | None, Decimal | None]:
+    if amount is None:
+        return None, None
+    normalized = retention.strip().lower()
+    if normalized == "não retido":
+        return Decimal("0"), amount
+    if normalized.startswith("retido"):
+        return amount, Decimal("0")
+    return None, None
+
+
 def _parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
         return value.replace(tzinfo=None)
@@ -886,8 +1038,7 @@ def _format_tax_id(value: str) -> str:
     if len(identifier) != 14 or not identifier.isdigit():
         return identifier or "-"
     return (
-        f"{identifier[:2]}.{identifier[2:5]}.{identifier[5:8]}/"
-        f"{identifier[8:12]}-{identifier[12:]}"
+        f"{identifier[:2]}.{identifier[2:5]}.{identifier[5:8]}/{identifier[8:12]}-{identifier[12:]}"
     )
 
 

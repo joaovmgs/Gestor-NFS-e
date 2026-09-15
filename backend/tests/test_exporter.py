@@ -2,11 +2,19 @@ from io import BytesIO
 from zipfile import ZipFile
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 from nfse_desktop.database import Database
 from nfse_desktop.exporter import DocumentExporter
 from nfse_desktop.report import generate_nfse_report_xlsx
 from nfse_desktop.repository import Repository
+
+
+def _value_for_header(sheet, title: str, row: int = 9):
+    for cell in sheet[8]:
+        if cell.value == title:
+            return sheet.cell(row=row, column=cell.column).value
+    raise AssertionError(f"Coluna ausente no relatório: {title}")
 
 
 def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None:
@@ -57,6 +65,10 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
                 </serv>
                 <valores>
                   <vServPrest><vServ>100.00</vServ></vServPrest>
+                  <vDescCondIncond>
+                    <vDescIncond>1.25</vDescIncond>
+                    <vDescCond>2.75</vDescCond>
+                  </vDescCondIncond>
                   <trib>
                     <tribFed>
                       <vRetIRRF>1.10</vRetIRRF>
@@ -89,6 +101,7 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
               <vBC>95.00</vBC>
               <pAliqAplic>2.00</pAliqAplic>
               <vISSQN>6.60</vISSQN>
+              <vTotalRet>13.20</vTotalRet>
               <vLiq>80.00</vLiq>
             </valores>
             <IBSCBS>
@@ -169,17 +182,23 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
             summary = workbook["Resumo"]
             assert summary["A1"].value == "RESUMO DE SERVIÇOS PRESTADOS"
             assert summary["A8"].value == "=COUNTA('Serviços Prestados'!A9:A10)"
-            assert summary["B8"].value == '=COUNTIF(\'Serviços Prestados\'!B9:B10,"Autorizada")'
-            assert summary["C8"].value == '=COUNTIF(\'Serviços Prestados\'!B9:B10,"Cancelada")'
+            assert summary["B8"].value == "=COUNTIF('Serviços Prestados'!B9:B10,\"Autorizada\")"
+            assert summary["C8"].value == "=COUNTIF('Serviços Prestados'!B9:B10,\"Cancelada\")"
             assert summary["A12"].value == "=SUM('Serviços Prestados'!L9:L10)"
-            assert summary["B12"].value == "=SUM('Serviços Prestados'!N9:N10)"
-            assert summary["C12"].value == "=SUM('Serviços Prestados'!X9:X10)"
-            assert summary["A16"].value == "=SUM('Serviços Prestados'!O9:O10)"
-            assert summary["B16"].value == "=SUM('Serviços Prestados'!T9:T10)"
-            assert summary["C16"].value == "=SUM('Serviços Prestados'!U9:U10)"
-            assert summary["A20"].value == "=SUM('Serviços Prestados'!V9:V10)"
-            assert summary["B20"].value == "=SUM('Serviços Prestados'!W9:W10)"
-            assert summary["C20"].value == "=SUM(A20:B20)"
+            assert summary["B12"].value == "=SUM('Serviços Prestados'!P9:P10)"
+            assert summary["C12"].value == "=SUM('Serviços Prestados'!O9:O10)"
+            assert summary["D12"].value == "=SUM('Serviços Prestados'!Q9:Q10)"
+            assert summary["A16"].value == "=SUM('Serviços Prestados'!Z9:Z10)"
+            assert summary["B16"].value == "=SUM('Serviços Prestados'!X9:X10)"
+            assert summary["C16"].value == "=SUM('Serviços Prestados'!Y9:Y10)"
+            assert summary["D16"].value == "=SUM('Serviços Prestados'!V9:V10)"
+            assert summary["A20"].value == "=SUM('Serviços Prestados'!W9:W10)"
+            assert summary["B20"].value == "=SUM('Serviços Prestados'!AH9:AH10)"
+            assert summary["C20"].value == "=SUM('Serviços Prestados'!AI9:AI10)"
+            assert summary["D20"].value == "=SUM(B20:C20)"
+            assert summary["A24"].value == "=SUM('Serviços Prestados'!AD9:AD10)"
+            assert summary["B24"].value == "=SUM('Serviços Prestados'!AE9:AE10)"
+            assert summary["C24"].value == "=SUM(A24:B24)"
             sheet = workbook["Serviços Prestados"]
             assert sheet["A1"].value == "RELATÓRIO DE SERVIÇOS PRESTADOS"
             assert sheet["A8"].value == "Número da NFS-e"
@@ -195,18 +214,25 @@ def test_export_zip_separates_cancelled_documents(tmp_path, monkeypatch) -> None
             assert sheet["I9"].value == "Consultoria em tecnologia."
             assert sheet["J9"].value == "Consultoria mensal"
             assert sheet["K9"].value == "1.1103.21.00"
-            assert sheet["M9"].value == 0.02
-            assert sheet["N9"].value == 95
-            assert sheet["O9"].value == 6.6
-            assert sheet["Q9"].value == 0.001
-            assert sheet["R9"].value == 0
-            assert sheet["S9"].value == 0.009
-            assert sheet["T9"].value == 7.7
-            assert sheet["U9"].value == 8.8
-            assert sheet["V9"].value == 9.9
-            assert sheet["W9"].value == 10.1
-            assert sheet["X9"].value == 80
-            assert sheet["Y9"].value
+            assert _value_for_header(sheet, "Desconto incondicionado") == 1.25
+            assert _value_for_header(sheet, "Desconto condicionado") == 2.75
+            assert _value_for_header(sheet, "Total de descontos") == 4
+            assert _value_for_header(sheet, "Total de retenções") == 13.2
+            assert _value_for_header(sheet, "Valor líquido") == 80
+            assert _value_for_header(sheet, "Alíquota do ISS") == 0.02
+            assert _value_for_header(sheet, "Base de cálculo do ISS") == 95
+            assert _value_for_header(sheet, "Valor do ISS") == 6.6
+            assert _value_for_header(sheet, "Retenção do ISS") == "Retido pelo Tomador"
+            assert _value_for_header(sheet, "ISS retido") == 6.6
+            assert _value_for_header(sheet, "ISS não retido") == 0
+            assert _value_for_header(sheet, "Alíquota IBS UF") == 0.001
+            assert _value_for_header(sheet, "Alíquota IBS Municipal") == 0
+            assert _value_for_header(sheet, "Alíquota CBS") == 0.009
+            assert _value_for_header(sheet, "Valor IBS") == 7.7
+            assert _value_for_header(sheet, "Valor CBS") == 8.8
+            assert _value_for_header(sheet, "Valor do PIS – débito/apuração própria") == 9.9
+            assert _value_for_header(sheet, "Valor da COFINS – débito/apuração própria") == 10.1
+            assert _value_for_header(sheet, "Finalidade da NFS-e")
             assert sheet.column_dimensions["G"].width == 25
             assert sheet.row_dimensions[8].height == 42
         assert count == 2
@@ -281,10 +307,18 @@ def test_received_services_report_includes_provider_and_taxation(tmp_path) -> No
                     <xDescServ>Licença mensal</xDescServ>
                   </cServ>
                 </serv>
-                <valores><vServPrest><vServ>250.00</vServ></vServPrest></valores>
+                <valores>
+                  <vServPrest><vServ>250.00</vServ></vServPrest>
+                  <trib>
+                    <tribMun>
+                      <tribISSQN>1</tribISSQN>
+                      <tpRetISSQN>1</tpRetISSQN>
+                    </tribMun>
+                  </trib>
+                </valores>
               </infDPS>
             </DPS>
-            <valores><vLiq>250.00</vLiq></valores>
+            <valores><vISSQN>5.00</vISSQN><vLiq>250.00</vLiq></valores>
           </infNFSe>
         </NFSe>
         """,
@@ -318,9 +352,9 @@ def test_received_services_report_includes_provider_and_taxation(tmp_path) -> No
         summary = workbook["Resumo"]
         assert summary["A1"].value == "RESUMO DE SERVIÇOS TOMADOS"
         assert summary["A12"].value == "=SUM('Serviços Tomados'!K9:K9)"
-        assert summary["A20"].value == "=SUM('Serviços Tomados'!P9:P9)"
-        assert summary["B20"].value == "=SUM('Serviços Tomados'!Q9:Q9)"
-        assert summary["C20"].value == "=SUM('Serviços Tomados'!R9:R9)"
+        assert summary["B12"].value == "=SUM('Serviços Tomados'!O9:O9)"
+        assert summary["C12"].value == "=SUM('Serviços Tomados'!N9:N9)"
+        assert summary["D12"].value == "=SUM('Serviços Tomados'!P9:P9)"
         sheet = workbook["Serviços Tomados"]
         assert sheet["A1"].value == "RELATÓRIO DE SERVIÇOS TOMADOS"
         assert sheet["C9"].value == "35503081223412247000110000000600272226088748364133"
@@ -332,8 +366,11 @@ def test_received_services_report_includes_provider_and_taxation(tmp_path) -> No
         assert sheet["I9"].value == "Licenciamento de software."
         assert sheet["J9"].value == "Licença mensal"
         assert sheet["K9"].value == 250
+        assert _value_for_header(sheet, "Desconto incondicionado") is None
+        assert _value_for_header(sheet, "ISS retido") == 0
+        assert _value_for_header(sheet, "ISS não retido") == 5
         assert sheet.freeze_panes == "E9"
-        assert sheet.auto_filter.ref == "A8:Z9"
+        assert sheet.auto_filter.ref == f"A8:{get_column_letter(sheet.max_column)}9"
         assert sheet.column_dimensions["G"].width == 25
     finally:
         report_path.unlink(missing_ok=True)
