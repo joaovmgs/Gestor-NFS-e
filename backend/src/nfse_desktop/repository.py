@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .certificates import evaluate_certificate_health
 from .database import Database
 
 
@@ -19,7 +20,7 @@ class Repository:
                 ORDER BY c.legal_name COLLATE NOCASE
                 """
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._company_record(row) for row in rows]
 
     def initialize_settings(self, default_notes_dir: str) -> None:
         with self.database.connect() as connection:
@@ -77,7 +78,7 @@ class Repository:
                 """,
                 (cnpj,),
             ).fetchone()
-        return dict(row) if row else None
+        return self._company_record(row) if row else None
 
     def save_company(self, company: dict[str, Any]) -> None:
         with self.database.connect() as connection:
@@ -115,6 +116,39 @@ class Repository:
         with self.database.connect() as connection:
             cursor = connection.execute("DELETE FROM companies WHERE cnpj = ?", (cnpj,))
         return cursor.rowcount > 0
+
+    def update_certificate_metadata(
+        self,
+        cnpj: str,
+        *,
+        certificate_cnpj: str,
+        certificate_expires_at: str,
+    ) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE companies SET
+                  certificate_cnpj = ?,
+                  certificate_expires_at = ?,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE cnpj = ?
+                """,
+                (certificate_cnpj, certificate_expires_at, cnpj),
+            )
+
+    @staticmethod
+    def _company_record(row: Any) -> dict[str, Any]:
+        company = dict(row)
+        health = evaluate_certificate_health(
+            company.get("certificate_expires_at"),
+            certificate_source=company.get("certificate_source"),
+            certificate_reference=company.get("certificate_reference"),
+            sync_status=company.get("sync_status"),
+            diagnostic=company.get("diagnostic"),
+        )
+        company["certificate_status"] = health.status
+        company["certificate_message"] = health.message
+        return company
 
     def list_documents(
         self,

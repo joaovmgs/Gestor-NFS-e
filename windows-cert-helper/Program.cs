@@ -28,6 +28,22 @@ if (string.Equals(args[0], "fetch", StringComparison.OrdinalIgnoreCase) && args.
         Console.Error.WriteLine("Certificado nao encontrado no repositorio do Windows.");
         return 3;
     }
+    if (!certificate.HasPrivateKey)
+    {
+        Console.Error.WriteLine("O certificado do Windows nao possui chave privada.");
+        return 3;
+    }
+    var now = DateTimeOffset.Now.LocalDateTime;
+    if (certificate.NotBefore > now)
+    {
+        Console.Error.WriteLine("O certificado do Windows ainda nao esta valido.");
+        return 3;
+    }
+    if (certificate.NotAfter < now)
+    {
+        Console.Error.WriteLine("O certificado digital esta vencido.");
+        return 3;
+    }
 
     if (!long.TryParse(args[2], out var nsu) || nsu < 0)
     {

@@ -87,6 +87,7 @@ interface CompanyRecord {
   certificate_source: "pfx" | "windows";
   certificate_cnpj?: string;
   certificate_reference?: string;
+  certificate_expires_at: string;
   remember_certificate: number;
   last_nsu: number;
 }
@@ -558,8 +559,7 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
     } catch (error) {
       const detail = error as Error & { stderr?: string };
       const errorMessage = detail.stderr?.trim() || detail.message;
-      if (errorMessage.toLocaleLowerCase("pt-BR").includes("certificado nao encontrado")) {
-        await addSyncLog(company.cnpj, "error", errorMessage);
+      if (isPermanentSyncError(errorMessage)) {
         throw new Error(errorMessage);
       }
 
@@ -643,6 +643,7 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
     const companies = await api<CompanyRecord[]>("/companies");
     company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
+    validateCompanyCertificateMetadata(company);
 
     const downloaded = company.certificate_source === "windows"
       ? await synchronizeWindowsCompany(company)
@@ -674,6 +675,16 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
   }
 }
 
+function validateCompanyCertificateMetadata(company: CompanyRecord): void {
+  const expiration = Date.parse(company.certificate_expires_at);
+  if (Number.isNaN(expiration)) {
+    throw new Error("Nao foi possivel validar a data de vencimento do certificado.");
+  }
+  if (expiration < Date.now()) {
+    throw new Error("O certificado digital esta vencido.");
+  }
+}
+
 function isPermanentSyncError(message: string): boolean {
   const normalized = message.toLocaleLowerCase("pt-BR");
   return [
@@ -682,6 +693,14 @@ function isPermanentSyncError(message: string): boolean {
     "certificado nao encontrado",
     "certificado não encontrado",
     "certificado vencido",
+    "certificado digital esta vencido",
+    "certificado digital está vencido",
+    "certificado do windows ainda nao esta valido",
+    "certificado do windows ainda não está válido",
+    "data de vencimento do certificado",
+    "pfx corrompido",
+    "chave privada",
+    "cnpj do certificado",
     "senha incorreta",
     "informe a senha"
   ].some((fragment) => normalized.includes(fragment));

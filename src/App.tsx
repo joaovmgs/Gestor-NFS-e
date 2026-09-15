@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   SquareArrowOutUpRight,
+  TriangleAlert,
   Trash2,
   X
 } from "lucide-react";
@@ -63,6 +64,14 @@ const syncStatusLabel = (status: string) => {
   };
   return labels[status] ?? status;
 };
+
+const hasCertificateAlert = (company?: Company) =>
+  company?.certificate_status === "expired" || company?.certificate_status === "invalid";
+
+const certificateAlertTitle = (company: Company) =>
+  company.certificate_status === "expired"
+    ? "Certificado digital vencido"
+    : "Problema com o certificado digital";
 
 const currentMonthRange = () => {
   const now = new Date();
@@ -133,6 +142,7 @@ export function App() {
   const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null);
 
   const selected = companies.find((company) => company.cnpj === selectedCnpj);
+  const certificateAlertCount = companies.filter(hasCertificateAlert).length;
   const normalizedQueryCnpjs = () =>
     queryCnpjs.map((cnpj) => normalizeCnpj(cnpj)).filter(Boolean);
 
@@ -143,6 +153,13 @@ export function App() {
     setPendingWindowsCertificate(null);
     setRegistrationResult(null);
     setDialogMessage("");
+  }
+
+  function replaceSelectedCertificate() {
+    if (!selected) return;
+    resetRegistrationState();
+    setQueryCnpjs([selected.cnpj]);
+    setDialog("method");
   }
 
   function updateQueryCnpj(index: number, value: string) {
@@ -551,7 +568,14 @@ export function App() {
         </div>
 
         <div className="sidebar-heading">
-          <span>Empresas</span>
+          <span className="sidebar-heading-label">
+            Empresas
+            {certificateAlertCount > 0 && (
+              <span className="sidebar-alert-count" title={`${certificateAlertCount} empresa(s) com problema no certificado`}>
+                <TriangleAlert size={12} /> {certificateAlertCount}
+              </span>
+            )}
+          </span>
           <button className="icon-button" title="Cadastrar empresa" onClick={() => { resetRegistrationState(); setDialog("method"); }}>
             <Plus size={17} />
           </button>
@@ -568,7 +592,7 @@ export function App() {
         <nav className="company-list" aria-label="Empresas cadastradas">
           {visibleCompanies.map((company) => (
             <button
-              className={`company-item ${company.cnpj === selectedCnpj ? "active" : ""}`}
+              className={`company-item ${company.cnpj === selectedCnpj ? "active" : ""} ${hasCertificateAlert(company) ? "has-certificate-alert" : ""}`}
               key={company.cnpj}
               onClick={() => selectCompany(company.cnpj)}
             >
@@ -577,7 +601,16 @@ export function App() {
                 <strong>{company.legal_name}</strong>
                 <small>{formatCnpj(company.cnpj)}</small>
               </span>
-              <ChevronRight size={15} />
+              <span className="company-item-end">
+                {hasCertificateAlert(company) && (
+                  <TriangleAlert
+                    className="company-alert-icon"
+                    size={17}
+                    aria-label={company.certificate_message || "Problema com o certificado"}
+                  />
+                )}
+                <ChevronRight size={15} />
+              </span>
             </button>
           ))}
           {!loading && companies.length === 0 && (
@@ -657,10 +690,28 @@ export function App() {
           </section>
         ) : (
           <>
+            {hasCertificateAlert(selected) && (
+              <section className="certificate-alert" role="alert">
+                <span className="certificate-alert-icon"><TriangleAlert size={20} /></span>
+                <div>
+                  <strong>{certificateAlertTitle(selected)}</strong>
+                  <span>
+                    {selected.certificate_message ||
+                      "Não foi possível utilizar o certificado cadastrado para esta empresa."}
+                  </span>
+                  <small>
+                    Atualize o certificado para que as verificações diárias voltem a funcionar.
+                  </small>
+                </div>
+                <button className="button certificate-alert-action" onClick={replaceSelectedCertificate}>
+                  Atualizar certificado
+                </button>
+              </section>
+            )}
             <section className="summary-band">
               <div><span>Último NSU</span><strong>{selected.last_nsu}</strong></div>
               <div><span>Documentos no período</span><strong>{documentTotal}</strong></div>
-              <div>
+              <div className={hasCertificateAlert(selected) ? "certificate-summary-problem" : ""}>
                 <span>Certificado válido até</span>
                 <strong>{formatDate(selected.certificate_expires_at)}</strong>
                 {selected.certificate_cnpj && selected.certificate_cnpj !== selected.cnpj && (

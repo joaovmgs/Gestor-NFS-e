@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -17,6 +18,82 @@ class CertificateInfo:
     legal_name: str
     expires_at: str
     issuer: str
+
+
+@dataclass(frozen=True)
+class CertificateHealth:
+    status: str
+    message: str
+
+
+def evaluate_certificate_health(
+    expires_at: object,
+    *,
+    certificate_source: object = "pfx",
+    certificate_reference: object = None,
+    sync_status: object = "idle",
+    diagnostic: object = "",
+    now: datetime | None = None,
+) -> CertificateHealth:
+    if str(certificate_source or "") == "windows" and not str(
+        certificate_reference or ""
+    ).strip():
+        return CertificateHealth(
+            "invalid",
+            "O certificado não foi encontrado no repositório do Windows.",
+        )
+
+    expiration_text = str(expires_at or "").strip()
+    if not expiration_text:
+        return CertificateHealth(
+            "invalid",
+            "A data de validade do certificado não está disponível.",
+        )
+    try:
+        expiration = _as_utc(datetime.fromisoformat(expiration_text.replace("Z", "+00:00")))
+    except ValueError:
+        return CertificateHealth(
+            "invalid",
+            "Não foi possível validar a data de vencimento do certificado.",
+        )
+
+    checked_at = _as_utc(now or datetime.now(UTC))
+    if expiration < checked_at:
+        return CertificateHealth(
+            "expired",
+            f"O certificado digital venceu em {expiration.astimezone(UTC):%d/%m/%Y}.",
+        )
+
+    normalized_diagnostic = _normalize_message(str(diagnostic or ""))
+    if (
+        str(sync_status or "") == "error"
+        and "certificado" in normalized_diagnostic
+        and "vencid" in normalized_diagnostic
+    ):
+        return CertificateHealth(
+            "expired",
+            str(diagnostic).strip() or "O certificado digital está vencido.",
+        )
+    certificate_error = "certificado" in normalized_diagnostic and any(
+        fragment in normalized_diagnostic
+        for fragment in (
+            "corrompido",
+            "invalido",
+            "nao encontrado",
+            "nao possui",
+            "ainda nao esta valido",
+            "chave privada",
+            "cnpj",
+        )
+    )
+    password_error = "senha incorreta" in normalized_diagnostic
+    if str(sync_status or "") == "error" and (certificate_error or password_error):
+        return CertificateHealth(
+            "invalid",
+            str(diagnostic).strip() or "Não foi possível usar o certificado digital.",
+        )
+
+    return CertificateHealth("valid", "")
 
 
 def validate_certificate_period(not_before: datetime, not_after: datetime) -> None:
@@ -89,6 +166,11 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def _normalize_message(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(character for character in normalized if not unicodedata.combining(character))
 
 
 def _cnpj_from_certificate(certificate: x509.Certificate) -> str:
