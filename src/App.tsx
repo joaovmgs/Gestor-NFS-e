@@ -241,7 +241,11 @@ export function App() {
     if (next) {
       await loadDocuments(next);
       const company = result.find((item) => item.cnpj === next);
-      if (company?.remember_certificate || company?.certificate_source === "windows") {
+      if (
+        company &&
+        !hasCertificateAlert(company) &&
+        (company.remember_certificate || company.certificate_source === "windows")
+      ) {
         await window.nfse.syncCompany(next, undefined, false).catch(() => undefined);
       }
     }
@@ -304,7 +308,11 @@ export function App() {
     setSyncLogs([]);
     await loadDocuments(cnpj);
     const company = companies.find((item) => item.cnpj === cnpj);
-    if (company?.remember_certificate || company?.certificate_source === "windows") {
+    if (
+      company &&
+      !hasCertificateAlert(company) &&
+      (company.remember_certificate || company.certificate_source === "windows")
+    ) {
       await window.nfse.syncCompany(cnpj, undefined, false).catch(() => undefined);
     }
   }
@@ -441,6 +449,13 @@ export function App() {
 
   async function syncCompany(passwordForSession?: string) {
     if (!selected) return;
+    if (hasCertificateAlert(selected)) {
+      setMessage(
+        selected.certificate_message ||
+          "Atualize o certificado desta empresa antes de sincronizar."
+      );
+      return;
+    }
     setMessage("");
     try {
       const queued = await window.nfse.syncCompany(selected.cnpj, passwordForSession, true);
@@ -723,8 +738,18 @@ export function App() {
               <div className="sync-box">
                 <span className={`status-dot ${selected.sync_status}`} />
                 <span>{syncStatusLabel(selected.sync_status)}</span>
-                <button className="button sync" disabled={selectedSyncActive || selectedSyncPending > 0} onClick={() => selected.remember_certificate ? syncCompany() : setDialog("sync")}>
-                  <RefreshCw className={selectedSyncActive && !selectedSyncPaused ? "spinning" : ""} size={16} /> {selectedSyncPaused ? "Em pausa" : selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
+                <button
+                  className="button sync"
+                  disabled={hasCertificateAlert(selected) || selectedSyncActive || selectedSyncPending > 0}
+                  title={hasCertificateAlert(selected) ? "Atualize o certificado antes de sincronizar" : undefined}
+                  onClick={() => selected.remember_certificate ? syncCompany() : setDialog("sync")}
+                >
+                  {hasCertificateAlert(selected) ? (
+                    <TriangleAlert size={16} />
+                  ) : (
+                    <RefreshCw className={selectedSyncActive && !selectedSyncPaused ? "spinning" : ""} size={16} />
+                  )}
+                  {hasCertificateAlert(selected) ? "Certificado inválido" : selectedSyncPaused ? "Em pausa" : selectedSyncActive ? "Sincronizando" : selectedSyncPending ? "Na fila" : "Sincronizar"}
                 </button>
               </div>
             </section>

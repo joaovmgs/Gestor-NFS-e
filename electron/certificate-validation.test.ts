@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  validateStoredCertificate,
   validateWindowsCertificate,
   WindowsCertificate
 } from "./certificate-validation.js";
@@ -53,4 +54,22 @@ test("rejects an expired Windows certificate", () => {
     })),
     /vencido/
   );
+});
+
+test("blocks synchronization when the stored certificate is expired", () => {
+  assert.throws(
+    () => validateStoredCertificate({
+      certificate_expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      certificate_status: "expired",
+      certificate_message: "O certificado digital venceu em 01/09/2026."
+    }),
+    /venceu em 01\/09\/2026/
+  );
+});
+
+test("accepts synchronization when the stored certificate is valid", () => {
+  assert.doesNotThrow(() => validateStoredCertificate({
+    certificate_expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    certificate_status: "valid"
+  }));
 });

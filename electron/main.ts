@@ -25,6 +25,7 @@ import {
   resolveDownloadQuery
 } from "./download-query.js";
 import {
+  validateStoredCertificate,
   validateWindowsCertificate,
   WindowsCertificate
 } from "./certificate-validation.js";
@@ -88,6 +89,8 @@ interface CompanyRecord {
   certificate_cnpj?: string;
   certificate_reference?: string;
   certificate_expires_at: string;
+  certificate_status?: "valid" | "expired" | "invalid";
+  certificate_message?: string;
   remember_certificate: number;
   last_nsu: number;
 }
@@ -643,7 +646,7 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
     const companies = await api<CompanyRecord[]>("/companies");
     company = companies.find((item) => item.cnpj === request.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
-    validateCompanyCertificateMetadata(company);
+    validateStoredCertificate(company);
 
     const downloaded = company.certificate_source === "windows"
       ? await synchronizeWindowsCompany(company)
@@ -672,16 +675,6 @@ async function synchronizeCompany(request: SyncRequest): Promise<void> {
           : `${request.cnpj}: o aplicativo tentara novamente automaticamente.`
       );
     }
-  }
-}
-
-function validateCompanyCertificateMetadata(company: CompanyRecord): void {
-  const expiration = Date.parse(company.certificate_expires_at);
-  if (Number.isNaN(expiration)) {
-    throw new Error("Nao foi possivel validar a data de vencimento do certificado.");
-  }
-  if (expiration < Date.now()) {
-    throw new Error("O certificado digital esta vencido.");
   }
 }
 
@@ -957,7 +950,11 @@ function registerIpc(): void {
     await removeCredential(cnpj);
     return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
-  ipcMain.handle("companies:sync", (_event, input: SyncRequest) => {
+  ipcMain.handle("companies:sync", async (_event, input: SyncRequest) => {
+    const companies = await api<CompanyRecord[]>("/companies");
+    const company = companies.find((item) => item.cnpj === input.cnpj);
+    if (!company) throw new Error("Empresa nao encontrada.");
+    validateStoredCertificate(company);
     cancelScheduledSyncRetry(input.cnpj);
     const snapshot = syncQueue.snapshot();
     if (snapshot.activeId === input.cnpj || snapshot.pendingIds.includes(input.cnpj)) {

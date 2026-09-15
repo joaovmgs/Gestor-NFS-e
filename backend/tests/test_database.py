@@ -82,6 +82,26 @@ def test_expired_certificate_is_returned_as_company_alert(tmp_path) -> None:
     assert company["certificate_status"] == "expired"
     assert "venceu em 01/01/2020" in company["certificate_message"]
 
+    repository.set_sync_state(
+        "12345678000190",
+        status="error",
+        diagnostic="CERTIFICADO | O certificado digital esta vencido.",
+    )
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa com Certificado Atualizado",
+            "certificate_source": "pfx",
+            "remember_certificate": True,
+            "certificate_reference": None,
+            "certificate_expires_at": "2030-01-01T00:00:00Z",
+        }
+    )
+    updated = repository.get_company("12345678000190")
+    assert updated is not None
+    assert updated["certificate_status"] == "valid"
+    assert updated["sync_status"] == "idle"
+
 
 def test_cancellation_event_updates_nfse_status(tmp_path) -> None:
     database = Database(tmp_path / "events.db")

@@ -67,10 +67,12 @@ button { cursor: pointer; }
 .button.danger { border-color: #c84d3a; background: #b83f2e; color: #fff; }
 .button.danger:hover { background: #9f3426; }
 .button.sync { margin-left: auto; background: #18211e; color: #fff; min-height: 34px; }
+.button.sync:disabled { cursor: not-allowed; opacity: .62; }
 .notice { margin: 18px 30px 0; display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-left: 3px solid #b6503c; background: #fff2ef; color: #7f3123; font-size: 13px; }
 .notice button { border: 0; background: transparent; color: inherit; }
 .certificate-alert { margin: 18px 30px 0; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid #e2a397; border-left: 4px solid #b83f2e; background: #fff1ee; color: #733025; box-shadow: 0 5px 18px rgba(184, 63, 46, 0.08); }
-.certificate-alert-icon { width: 38px; height: 38px; display: grid; place-items: center; background: #f8d5cf; color: #a63829; border-radius: 50%; }
+.certificate-alert-icon { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0; background: #f8d5cf; color: #a63829; border-radius: 50%; line-height: 0; }
+.certificate-alert-icon svg { display: block; flex: 0 0 auto; }
 .certificate-alert strong, .certificate-alert span, .certificate-alert small { display: block; }
 .certificate-alert strong { font-size: 13px; }
 .certificate-alert span { margin-top: 4px; font-size: 11px; line-height: 1.45; }

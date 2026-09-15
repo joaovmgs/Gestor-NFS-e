@@ -111,6 +111,17 @@ class Repository:
                 "INSERT OR IGNORE INTO sync_state (company_cnpj) VALUES (?)",
                 (company["cnpj"],),
             )
+            connection.execute(
+                """
+                UPDATE sync_state SET
+                  status = 'idle',
+                  diagnostic = 'Certificado atualizado. Pronto para sincronizar.',
+                  finished_at = CURRENT_TIMESTAMP,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE company_cnpj = ?
+                """,
+                (company["cnpj"],),
+            )
 
     def delete_company(self, cnpj: str) -> bool:
         with self.database.connect() as connection:
