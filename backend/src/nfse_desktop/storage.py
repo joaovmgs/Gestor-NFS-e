@@ -71,8 +71,10 @@ def document_xml_path(
     root = Path(notes_directory)
     filename = f"{nsu:012d}-{access_key}.xml"
     if dominio_enabled and document_type == "NFSE":
-        if not dominio_code or not dominio_alias or direction not in {"emitida", "recebida"}:
+        if direction not in {"emitida", "recebida"}:
             return root / cnpj / "xml" / filename
+        if not dominio_code or not dominio_alias:
+            dominio_code = dominio_alias = None
         code, alias = validate_dominio_configuration(
             dominio_code,
             dominio_alias,
@@ -101,6 +103,8 @@ def reorganize_company_xmls(
     repository: Any,
     cnpj: str,
     progress_callback: ProgressCallback | None = None,
+    *,
+    provisional_only: bool = False,
 ) -> dict[str, Any]:
     settings = repository.get_settings()
     if not settings["dominio_folder_layout_enabled"]:
@@ -112,6 +116,13 @@ def reorganize_company_xmls(
         raise ValueError("Atualize a conexão Domínio e resolva o vínculo desta empresa pelo CNPJ.")
 
     documents = repository.list_company_nfse_documents(cnpj)
+    if provisional_only:
+        root = Path(settings["notes_directory"])
+        provisional_roots = [root / kind / f"XX-EMPRESA-{cnpj}"
+                             for kind in ("Emitidas", "Recebidas")]
+        documents = [document for document in documents if any(
+            Path(document["xml_path"]).is_relative_to(folder) for folder in provisional_roots
+        )]
     result: dict[str, Any] = {
         "state": "running",
         "total": len(documents),
@@ -226,7 +237,7 @@ class ReorganizationManager:
         self._lock = Lock()
         self._jobs: dict[str, dict[str, Any]] = {}
 
-    def start(self, cnpj: str) -> dict[str, Any]:
+    def start(self, cnpj: str, *, provisional_only: bool = False) -> dict[str, Any]:
         settings = self.repository.get_settings()
         if not settings["dominio_folder_layout_enabled"]:
             raise ValueError("Ative a organização de pastas para o Domínio nas configurações.")
@@ -248,7 +259,7 @@ class ReorganizationManager:
             self._jobs[cnpj] = status
         Thread(
             target=self._run,
-            args=(cnpj,),
+            args=(cnpj, provisional_only),
             name=f"dominio-reorganization-{cnpj}",
             daemon=True,
         ).start()
@@ -261,10 +272,17 @@ class ReorganizationManager:
                 raise ValueError("Nenhuma reorganização foi iniciada para esta empresa.")
             return self._copy(current)
 
-    def _run(self, cnpj: str) -> None:
+    def _run(self, cnpj: str, provisional_only: bool = False) -> None:
         try:
-            result = reorganize_company_xmls(self.repository, cnpj, self._update(cnpj))
+            result = reorganize_company_xmls(
+                self.repository, cnpj, self._update(cnpj), provisional_only=provisional_only,
+            )
             self._set(cnpj, result)
+            if provisional_only and result["errors"]:
+                self.repository.add_sync_log(
+                    cnpj, "warning", "Alguns XMLs provisórios não puderam ser reorganizados. "
+                    "Confira a opção Reorganizar XMLs existentes nas configurações da empresa.",
+                )
         except Exception as exc:
             with self._lock:
                 current = self._jobs[cnpj]

@@ -303,7 +303,7 @@ const dominioMonitor = new DominioMonitor(async () => {
   if (!config) throw new Error("Conexão Domínio não configurada.");
   return connectDominio(config);
 });
-let dominioCompaniesKey = "";
+let dominioCompaniesKey: Set<string> | undefined;
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
@@ -841,7 +841,9 @@ function registerIpc(): void {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings)
     });
-    void dominioMonitor.wait().then(() => dominioMonitor.refresh(true));
+    if (!settings.dominio_folder_layout_enabled) {
+      void dominioMonitor.wait().then(() => dominioMonitor.refresh(true));
+    }
     return updated;
   });
   ipcMain.handle("settings:select-directory", async () => {
@@ -859,11 +861,10 @@ function registerIpc(): void {
   ipcMain.handle("window:close", () => mainWindow?.hide());
   ipcMain.handle("companies:list", async () => {
     const companies = await api<CompanyRecord[]>("/companies");
-    const key = companies.map((company) => company.cnpj).sort().join(",");
-    if (key !== dominioCompaniesKey) {
-      dominioCompaniesKey = key;
-      void dominioMonitor.refresh(true);
-    }
+    const key = new Set(companies.map((company) => company.cnpj));
+    const added = dominioCompaniesKey && [...key].some(cnpj => !dominioCompaniesKey!.has(cnpj));
+    dominioCompaniesKey = key;
+    if (added) void dominioMonitor.wait().then(() => dominioMonitor.refresh(true));
     return companies;
   });
   ipcMain.handle("companies:update-settings", (_event, input: {
@@ -875,7 +876,6 @@ function registerIpc(): void {
     body: JSON.stringify(input.settings)
   }));
   ipcMain.handle("companies:reorganize-dominio", async (_event, cnpj: string) => {
-    await dominioMonitor.refresh();
     let status = await api<ReorganizationStatus>(
       `/companies/${cnpj}/dominio/reorganize`,
       { method: "POST" }
@@ -1048,7 +1048,6 @@ function registerIpc(): void {
     return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
   ipcMain.handle("companies:sync", async (_event, input: SyncRequest) => {
-    void dominioMonitor.refresh();
     const companies = await api<CompanyRecord[]>("/companies");
     const company = companies.find((item) => item.cnpj === input.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");
@@ -1142,7 +1141,6 @@ app.whenReady()
     await createWindow();
     await createTray();
     void dominioMonitor.refresh(true);
-    setInterval(() => { void dominioMonitor.refresh(); }, 5_000).unref();
     void checkForUpdates().catch(() => undefined);
     setInterval(() => {
       void checkForUpdates(true).catch(() => undefined);

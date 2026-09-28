@@ -10,7 +10,7 @@ export interface DominioStatus {
 export class DominioMonitor {
   status: DominioStatus = { state: "disabled", message: "Integração Domínio desativada." };
   private pending?: Promise<void>;
-  private nextCheck = 0;
+  private checked = false;
 
   constructor(
     private readonly query: () => Promise<DominioResult | null>,
@@ -34,15 +34,15 @@ export class DominioMonitor {
     this.status = {
       state: "connected", lastSuccess: new Date(this.now()).toISOString(), result,
       message: result.issues.length
-        ? `Domínio conectado · ${result.issues.length} empresa(s) aguardando vínculo.`
-        : "Domínio conectado · cadastros atualizados.",
+        ? `Domínio consultado · ${result.issues.length} empresa(s) com cadastro provisório.`
+        : "Domínio consultado · cadastros atualizados.",
     };
-    this.nextCheck = this.now() + 60_000;
+    this.checked = true;
   }
 
   refresh(force = false): Promise<void> {
     if (this.pending) return this.pending;
-    if (!force && this.now() < this.nextCheck) return Promise.resolve();
+    if (!force && this.checked) return Promise.resolve();
     this.pending = this.run().finally(() => { this.pending = undefined; });
     return this.pending;
   }
@@ -56,10 +56,10 @@ export class DominioMonitor {
     } catch {
       this.status = {
         ...this.status, state: "offline",
-        message: "Domínio indisponível. Nova tentativa automática em cerca de 1 minuto. Os vínculos salvos continuam em uso.",
+        message: "Domínio indisponível na última consulta. Usando vínculos salvos ou nomes provisórios. Consulte novamente nas configurações.",
       };
     } finally {
-      this.nextCheck = this.now() + 60_000;
+      this.checked = true;
     }
   }
 }

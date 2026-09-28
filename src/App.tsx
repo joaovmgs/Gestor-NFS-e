@@ -784,7 +784,7 @@ export function App() {
           )}
         </nav>
         <div className="sidebar-footer">
-          {dominioStatus && dominioStatus.state !== "disabled" && (
+          {dominioStatus?.state === "offline" && (
             <small className={`dominio-status ${dominioStatus.state}`} role="status">{dominioStatus.message}</small>
           )}
           <button className="settings-button" onClick={openSettings}><Settings size={16} /> Configurações</button>
@@ -1299,8 +1299,8 @@ export function App() {
                     ))}
                   </div>
                   <small>O acesso é usado somente para leitura. As credenciais ficam protegidas neste usuário do Windows.</small>
-                  <small>Após configurar, a consulta fica ativa em segundo plano, inclusive na bandeja. Empresas sem vínculo são verificadas a cada minuto, com reconexão automática quando a rede voltar.</small>
-                  {dominioStatus && <div className={`dominio-status ${dominioStatus.state}`} role="status">
+                  <small>O Domínio é consultado ao abrir o Gestor e ao cadastrar uma nova empresa. Não há consultas por minuto. Você também pode conectar manualmente aqui.</small>
+                  {dominioStatus?.state === "offline" && <div className={`dominio-status ${dominioStatus.state}`} role="status">
                     {dominioStatus.message}
                     {dominioStatus.lastSuccess && <small> Última consulta: {new Date(dominioStatus.lastSuccess).toLocaleString("pt-BR")}</small>}
                   </div>}
@@ -1312,7 +1312,7 @@ export function App() {
                   {!!dominioResult?.issues.length && <div className="dominio-issues" role="status">
                     <strong>Empresas que precisam de revisão</strong>
                     {dominioResult.issues.map((issue) => <p key={issue.cnpj}>{formatCnpj(issue.cnpj)}: {issue.message}</p>)}
-                    <small>Os XMLs dessas empresas permanecem na pasta por CNPJ até o cadastro ser resolvido.</small>
+                    <small>Os XMLs usam XX-EMPRESA-CNPJ provisoriamente. Quando a consulta encontrar o cadastro, as pastas provisórias serão ajustadas automaticamente.</small>
                   </div>}
                   <div className="path-preview"><span>Pastas para as rotinas do Domínio</span>
                     <code>Emitidas\Código-Apelido\MMAAAA</code>
@@ -1427,7 +1427,7 @@ export function App() {
                 <span>Prévia da pasta</span>
                 <code>{companySettings.dominio_code && companySettings.dominio_alias
                   ? `${settings.notes_directory || "Pasta das notas"}\\Emitidas (ou Recebidas)\\${companySettings.dominio_code}-${companySettings.dominio_alias}\\MMAAAA`
-                  : `Sem vínculo com o Domínio. XMLs em ${selected.cnpj}\\xml.`}</code>
+                  : `Emitidas (ou Recebidas)\\XX-EMPRESA-${selected.cnpj}\\MMAAAA`}</code>
               </div>
               <div className="reorganize-panel">
                 <div>

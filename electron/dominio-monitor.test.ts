@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DominioMonitor } from "./dominio-monitor.js";
 
-test("retries after disconnect and preserves the last successful result", async () => {
+test("does not retry with elapsed time; an explicit event rechecks cached mappings", async () => {
   let now = 0;
   let calls = 0;
   const monitor = new DominioMonitor(async () => {
@@ -14,12 +14,16 @@ test("retries after disconnect and preserves the last successful result", async 
   assert.equal(monitor.status.state, "connected");
   now = 60_000;
   await monitor.refresh();
+  assert.equal(calls, 1);
+  await monitor.refresh(true);
   assert.equal(monitor.status.state, "offline");
   assert.equal(monitor.status.result?.matched, 1);
   await monitor.refresh();
   assert.equal(calls, 2);
   now = 120_000;
   await monitor.refresh();
+  assert.equal(calls, 2);
+  await monitor.refresh(true);
   assert.equal(monitor.status.state, "connected");
   assert.equal(monitor.status.result?.matched, 3);
 });
@@ -41,7 +45,7 @@ test("rechecks missing companies and coalesces simultaneous refresh requests", a
   assert.equal(calls, 1);
   assert.equal(monitor.status.result?.issues.length, 1);
   now = 60_000;
-  await monitor.refresh();
+  await monitor.refresh(true);
   assert.equal(monitor.status.result?.issues.length, 0);
   assert.equal(monitor.status.result?.matched, 1);
 });

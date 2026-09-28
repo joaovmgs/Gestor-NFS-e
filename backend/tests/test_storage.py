@@ -31,7 +31,7 @@ def make_repository(tmp_path: Path) -> Repository:
     return repository
 
 
-def test_dominio_path_without_mapping_keeps_cnpj_layout(tmp_path: Path) -> None:
+def test_dominio_path_without_mapping_uses_provisional_folder(tmp_path: Path) -> None:
     path = document_xml_path(
         str(tmp_path),
         cnpj=CNPJ,
@@ -42,9 +42,11 @@ def test_dominio_path_without_mapping_keeps_cnpj_layout(tmp_path: Path) -> None:
         dominio_enabled=True,
         dominio_code=None,
         dominio_alias=None,
+        direction="emitida",
     )
 
-    assert path == tmp_path / CNPJ / "xml" / "000000000042-CHAVE.xml"
+    assert path == (tmp_path / "Emitidas" / f"XX-EMPRESA-{CNPJ}" / "012026"
+                    / "000000000042-CHAVE.xml")
 
 
 def test_dominio_path_combines_partial_configuration(tmp_path: Path) -> None:
@@ -112,6 +114,31 @@ def test_event_xml_keeps_legacy_layout(tmp_path: Path) -> None:
 def test_configured_alias_rejects_windows_invalid_characters() -> None:
     with pytest.raises(ValueError, match="não pode conter"):
         validate_dominio_configuration("40", "EMPRESA/TESTE", cnpj=CNPJ)
+
+
+def test_resolved_mapping_automatically_moves_only_provisional_xmls(tmp_path):
+    repository = make_repository(tmp_path)
+    root = tmp_path / "Notas"
+    repository.update_settings(str(root), True, True)
+    repository.update_company_settings(CNPJ, dominio_code="40", dominio_alias="OFICIAL")
+    provisional = root / "Recebidas" / f"XX-EMPRESA-{CNPJ}" / "012026" / "old.xml"
+    existing = root / "Recebidas" / "40-ANTIGO" / "012026" / "keep.xml"
+    for nsu, source in enumerate((provisional, existing), 1):
+        source.parent.mkdir(parents=True)
+        source.write_text("<NFSe />", encoding="utf-8")
+        repository.save_document({
+            "company_cnpj": CNPJ, "nsu": nsu, "access_key": f"KEY-{nsu}",
+            "document_type": "NFSE", "direction": "recebida", "issued_at": "2026-01-20",
+            "xml_path": str(source),
+        })
+    result = reorganize_company_xmls(repository, CNPJ, provisional_only=True)
+    assert result["total"] == result["moved"] == 1
+    assert result["errors"] == 0
+    assert existing.exists()
+    assert not provisional.exists()
+    destination = root / "Recebidas" / "40-OFICIAL" / "012026" / "000000000001-KEY-1.xml"
+    assert destination.read_text(encoding="utf-8") == "<NFSe />"
+    assert repository.list_company_nfse_documents(CNPJ)[0]["xml_path"] == str(destination)
 
 
 @pytest.mark.parametrize("direction,folder", [("emitida", "Emitidas"), ("recebida", "Recebidas")])

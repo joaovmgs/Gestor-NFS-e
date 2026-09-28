@@ -133,6 +133,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     exporter = DocumentExporter(repository)
     reorganization_manager = ReorganizationManager(repository)
 
+    def reorganize_provisional_xmls(companies: list[dict]) -> None:
+        options = repository.get_settings()
+        if not options["dominio_folder_layout_enabled"]:
+            return
+        root = Path(options["notes_directory"])
+        for company in companies:
+            if not company.get("dominio_code") or not company.get("dominio_alias"):
+                continue
+            folders = [root / kind / f"XX-EMPRESA-{company['cnpj']}"
+                       for kind in ("Emitidas", "Recebidas")]
+            if any(any(folder.glob("*/*.xml")) for folder in folders):
+                reorganization_manager.start(company["cnpj"], provisional_only=True)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         database.initialize()
@@ -185,6 +198,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "UPDATE companies SET dominio_code=NULL, dominio_alias=NULL WHERE cnpj=?",
                         (item["cnpj"],),
                     )
+            reorganize_provisional_xmls(result["matched"])
             return {"matched": len(result["matched"]), "issues": result["issues"]}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
@@ -194,11 +208,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         notes_directory = payload.notes_directory.strip()
         if not notes_directory:
             raise HTTPException(status_code=422, detail="Selecione uma pasta para as notas.")
-        return repository.update_settings(
+        result = repository.update_settings(
             notes_directory,
             payload.notifications_enabled,
             payload.dominio_folder_layout_enabled,
         )
+        reorganize_provisional_xmls(repository.list_companies())
+        return result
 
     @app.put("/companies/{cnpj}/settings", dependencies=[Depends(authorize)])
     def update_company_settings(cnpj: str, payload: CompanySettingsPayload):
