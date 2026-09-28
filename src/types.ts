@@ -6,6 +6,8 @@ export interface Company {
   remember_certificate: number;
   certificate_reference?: string;
   certificate_expires_at: string;
+  certificate_status: "valid" | "expired" | "invalid";
+  certificate_message?: string;
   last_nsu: number;
   sync_status: string;
   diagnostic?: string;

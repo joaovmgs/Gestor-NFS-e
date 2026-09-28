@@ -25,6 +25,8 @@ def test_company_round_trip(tmp_path) -> None:
     assert company is not None
     assert company["legal_name"] == "Empresa Teste"
     assert company["certificate_cnpj"] == "12345678000414"
+    assert company["certificate_status"] == "valid"
+    assert company["certificate_message"] == ""
     assert company["last_nsu"] == 0
     settings = repository.get_settings()
     assert settings["notes_directory"] == str(tmp_path / "Notas")
@@ -59,6 +61,46 @@ def test_company_round_trip(tmp_path) -> None:
     assert len(retained_logs) == 20
     assert retained_logs[0]["message"] == "Evento 24"
     assert retained_logs[-1]["message"] == "Evento 5"
+
+
+def test_expired_certificate_is_returned_as_company_alert(tmp_path) -> None:
+    database = Database(tmp_path / "expired.db")
+    database.initialize()
+    repository = Repository(database)
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa com Certificado Vencido",
+            "certificate_source": "pfx",
+            "remember_certificate": True,
+            "certificate_reference": None,
+            "certificate_expires_at": "2020-01-01T00:00:00Z",
+        }
+    )
+
+    company = repository.list_companies()[0]
+    assert company["certificate_status"] == "expired"
+    assert "venceu em 01/01/2020" in company["certificate_message"]
+
+    repository.set_sync_state(
+        "12345678000190",
+        status="error",
+        diagnostic="CERTIFICADO | O certificado digital esta vencido.",
+    )
+    repository.save_company(
+        {
+            "cnpj": "12345678000190",
+            "legal_name": "Empresa com Certificado Atualizado",
+            "certificate_source": "pfx",
+            "remember_certificate": True,
+            "certificate_reference": None,
+            "certificate_expires_at": "2030-01-01T00:00:00Z",
+        }
+    )
+    updated = repository.get_company("12345678000190")
+    assert updated is not None
+    assert updated["certificate_status"] == "valid"
+    assert updated["sync_status"] == "idle"
 
 
 def test_cancellation_event_updates_nfse_status(tmp_path) -> None:

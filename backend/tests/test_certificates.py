@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
 from nfse_desktop.certificates import (
+    evaluate_certificate_health,
     inspect_pfx,
     resolve_consulted_cnpj,
     validate_certificate_expiration,
@@ -72,6 +73,32 @@ def test_validate_certificate_expiration_rejects_expired_windows_payload() -> No
     expires_at = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     with pytest.raises(ValueError, match="vencido"):
         validate_certificate_expiration(expires_at)
+
+
+def test_certificate_health_marks_expired_certificate() -> None:
+    now = datetime(2026, 9, 15, 12, tzinfo=UTC)
+    health = evaluate_certificate_health("2026-09-14T23:59:59Z", now=now)
+    assert health.status == "expired"
+    assert "14/09/2026" in health.message
+
+
+def test_certificate_health_marks_certificate_sync_error() -> None:
+    health = evaluate_certificate_health(
+        "2030-01-01T00:00:00Z",
+        sync_status="error",
+        diagnostic="CERTIFICADO | Senha incorreta ou certificado PFX corrompido.",
+    )
+    assert health.status == "invalid"
+    assert "Senha incorreta" in health.message
+
+
+def test_certificate_health_ignores_unrelated_network_error() -> None:
+    health = evaluate_certificate_health(
+        "2030-01-01T00:00:00Z",
+        sync_status="error",
+        diagnostic="Falha de rede: timeout.",
+    )
+    assert health.status == "valid"
 
 
 def test_resolve_consulted_cnpj_accepts_same_root_branch() -> None:

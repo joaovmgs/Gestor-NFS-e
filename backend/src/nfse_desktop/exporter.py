@@ -93,7 +93,11 @@ class DocumentExporter:
                         try:
                             archive.write(
                                 report_path,
-                                arcname="relatorio-retencoes-nfse.xlsx",
+                                arcname=(
+                                    "relatorio-servicos-prestados.xlsx"
+                                    if direction == "emitida"
+                                    else "relatorio-servicos-tomados.xlsx"
+                                ),
                                 compress_type=ZIP_STORED,
                             )
                         finally:
