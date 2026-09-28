@@ -171,7 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail="Token local invalido.")
 
     @app.get("/health")
-    def health() -> dict[str, str]:
+    async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/companies", dependencies=[Depends(authorize)])
@@ -244,7 +244,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "/companies/{cnpj}/dominio/reorganize",
         dependencies=[Depends(authorize)],
     )
-    def get_dominio_reorganization(cnpj: str):
+    async def get_dominio_reorganization(cnpj: str):
         try:
             return reorganization_manager.status(cnpj)
         except ValueError as exc:

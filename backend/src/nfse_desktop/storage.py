@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import filecmp
+import os
 import re
 import shutil
 from collections.abc import Callable
@@ -96,7 +97,9 @@ def document_xml_path(
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
-REORGANIZATION_BATCH_SIZE = 250
+# Keep database transactions large enough to avoid thousands of syncs for
+# companies with a long document history, while still reporting regular progress.
+REORGANIZATION_BATCH_SIZE = 1000
 
 
 def reorganize_company_xmls(
@@ -153,7 +156,15 @@ def reorganize_company_xmls(
         except Exception as exc:
             for _, source, destination, action in reversed(pending):
                 try:
-                    if action == "copied" and source.exists() and destination.exists():
+                    if action == "moved" and destination.exists():
+                        if source.exists():
+                            add_error(FileExistsError(
+                                f"Arquivo de origem recriado durante a reorganização: {source.name}"
+                            ))
+                        else:
+                            source.parent.mkdir(parents=True, exist_ok=True)
+                            destination.replace(source)
+                    elif action == "copied" and source.exists() and destination.exists():
                         destination.unlink()
                 except OSError as rollback_error:
                     add_error(rollback_error)
@@ -167,6 +178,10 @@ def reorganize_company_xmls(
                     try:
                         if filecmp.cmp(source, destination, shallow=False):
                             source.unlink()
+                        else:
+                            add_error(FileExistsError(
+                                f"O conteúdo mudou antes da remoção do original: {source.name}"
+                            ))
                     except OSError as exc:
                         add_error(exc)
         pending.clear()
@@ -199,7 +214,9 @@ def reorganize_company_xmls(
                     found = [item for item in candidates if item.is_file()]
                     if len(found) == 1:
                         source = found[0]
-            if source.resolve() == destination.resolve():
+            if os.path.normcase(os.path.abspath(source)) == os.path.normcase(
+                os.path.abspath(destination)
+            ):
                 result["skipped"] += 1
             elif not source.is_file():
                 if destination.is_file():
@@ -215,8 +232,16 @@ def reorganize_company_xmls(
                         )
                     action = "deduplicated"
                 else:
-                    shutil.copy2(source, destination)
-                    action = "copied"
+                    try:
+                        same_volume = source.stat().st_dev == destination.parent.stat().st_dev
+                    except OSError:
+                        same_volume = False
+                    if same_volume:
+                        source.replace(destination)
+                        action = "moved"
+                    else:
+                        shutil.copy2(source, destination)
+                        action = "copied"
                 pending.append((int(document["id"]), source, destination, action))
         except Exception as exc:  # Cada arquivo deve falhar sem interromper os demais.
             add_error(exc)

@@ -882,8 +882,10 @@ function registerIpc(): void {
     );
     while (status.state === "running") {
       mainWindow?.webContents.send("companies:reorganize-progress", status);
-      await wait(500);
-      status = await api<ReorganizationStatus>(`/companies/${cnpj}/dominio/reorganize`);
+      await wait(1500);
+      status = await api<ReorganizationStatus>(`/companies/${cnpj}/dominio/reorganize`, {
+        signal: AbortSignal.timeout(30000)
+      });
     }
     mainWindow?.webContents.send("companies:reorganize-progress", status);
     if (status.state === "failed") {
