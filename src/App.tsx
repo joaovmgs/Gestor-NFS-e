@@ -24,6 +24,8 @@ import type {
   Company,
   CompanyRegistrationResult,
   Document,
+  DominioConfig,
+  DominioResult,
   DownloadOptions,
   ExportQueueStatus,
   PfxSelection,
@@ -36,6 +38,9 @@ import type {
 
 type Dialog = "method" | "pfx" | "windows" | "sync" | "settings" | "company-settings" | "download" | "delete-company" | null;
 const repositoryUrl = "https://github.com/joaovmgs/Gestor-NFS-e";
+const emptyDominioConfig: DominioConfig = {
+  driver: "SQL Anywhere 17", server: "", database: "", uid: "", pwd: "", host: ""
+};
 
 const formatCnpj = (value: string) =>
   /^\d{14}$/.test(value)
@@ -136,6 +141,11 @@ export function App() {
     notifications_enabled: true,
     dominio_folder_layout_enabled: false
   });
+  const [dominioConfig, setDominioConfig] = useState<DominioConfig>(emptyDominioConfig);
+  const [dominioPasswordSaved, setDominioPasswordSaved] = useState(false);
+  const [dominioBusy, setDominioBusy] = useState(false);
+  const [dominioMessage, setDominioMessage] = useState("");
+  const [dominioResult, setDominioResult] = useState<DominioResult | null>(null);
   const [companySettings, setCompanySettings] = useState({
     dominio_code: "",
     dominio_alias: ""
@@ -385,6 +395,14 @@ export function App() {
     setMessage("");
     try {
       setSettings(await window.nfse.getSettings());
+      const config = await window.nfse.getDominioConfig().catch(() => null);
+      setDominioConfig(config ? {
+        driver: config.driver, server: config.server, database: config.database,
+        uid: config.uid, pwd: "", host: config.host
+      } : emptyDominioConfig);
+      setDominioPasswordSaved(config?.passwordSaved ?? false);
+      setDominioMessage("");
+      setDominioResult(null);
       setDialog("settings");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao carregar configurações.");
@@ -438,16 +456,40 @@ export function App() {
 
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
+    setDominioBusy(true);
     try {
+      if (settings.dominio_folder_layout_enabled) await saveDominioConnection();
       setSettings(await window.nfse.updateSettings(settings));
       setDialog(null);
     } catch (error) {
+      setDominioMessage(error instanceof Error ? error.message : "Falha ao salvar configurações.");
       setMessage(error instanceof Error ? error.message : "Falha ao salvar configurações.");
+    } finally {
+      setDominioBusy(false);
     }
+  }
+
+  async function saveDominioConnection() {
+    const result = await window.nfse.connectDominio(dominioConfig);
+    setDominioResult(result);
+    setDominioPasswordSaved(true);
+    setDominioConfig((current) => ({ ...current, pwd: "" }));
+    setDominioMessage(`Conexão salva. ${result.matched} empresa(s) vinculada(s) pelo CNPJ.`);
+    setCompanies(await window.nfse.listCompanies());
+  }
+
+  async function testDominioConnection() {
+    setDominioBusy(true);
+    setDominioMessage("");
+    setDominioResult(null);
+    try { await saveDominioConnection(); }
+    catch (error) { setDominioMessage(error instanceof Error ? error.message : "Falha na conexão."); }
+    finally { setDominioBusy(false); }
   }
 
   async function openCompanySettings() {
     if (!selected) return;
+    setSettings(await window.nfse.getSettings());
     setCompanySettings({
       dominio_code: selected.dominio_code ?? "",
       dominio_alias: selected.dominio_alias ?? ""
@@ -458,6 +500,7 @@ export function App() {
 
   async function persistCompanySettings() {
     if (!selected) return null;
+    if (settings.dominio_folder_layout_enabled) return selected;
     const updated = await window.nfse.updateCompanySettings(selected.cnpj, companySettings);
     setCompanies((current) =>
       current.map((company) => (company.cnpj === updated.cnpj ? updated : company))
@@ -1201,9 +1244,45 @@ export function App() {
                 />
                 <span>
                   <strong>Organização de pastas para o Domínio <em>Experimental</em></strong>
-                  <small>Organiza novas NFS-e por empresa e mês de emissão. Configure cada empresa pela engrenagem no topo.</small>
+                  <small>Busca código e apelido no banco e separa emitidas e recebidas por empresa e mês de emissão.</small>
                 </span>
               </label>
+              {settings.dominio_folder_layout_enabled && (
+                <section className="dominio-connection" aria-label="Conexão com o Domínio">
+                  <div className="dominio-network-alert" role="alert">
+                    <TriangleAlert size={19} />
+                    <span>Este computador precisa estar na mesma rede do banco Domínio, ou conectado à VPN do escritório. É necessário o driver SQL Anywhere de 64 bits.</span>
+                  </div>
+                  <div className="company-settings-grid">
+                    {([ ["driver", "Driver ODBC", "SQL Anywhere 17"], ["server", "Servidor", "server"],
+                      ["database", "Banco de dados", "database"], ["host", "Endereço e porta", "host"],
+                      ["uid", "Usuário", "uid"], ["pwd", "Senha", "pwd"] ] as const).map(([field, label, placeholder]) => (
+                      <label key={field}>{label}
+                        <input type={field === "pwd" ? "password" : "text"}
+                          value={dominioConfig[field]} placeholder={placeholder}
+                          autoComplete="off" disabled={dominioBusy}
+                          onChange={(event) => setDominioConfig((current) => ({ ...current, [field]: event.target.value }))} />
+                        {field === "pwd" && dominioPasswordSaved && <small>Senha salva. Deixe vazio para mantê-la.</small>}
+                      </label>
+                    ))}
+                  </div>
+                  <small>O acesso é usado somente para leitura. As credenciais ficam protegidas neste usuário do Windows.</small>
+                  <button type="button" className="button secondary" disabled={dominioBusy} onClick={testDominioConnection}>
+                    <RefreshCw size={15} className={dominioBusy ? "spinning" : ""} />
+                    {dominioBusy ? "Conectando..." : "Conectar e salvar acesso"}
+                  </button>
+                  {dominioMessage && <div role="status" className="company-settings-feedback">{dominioMessage}</div>}
+                  {!!dominioResult?.issues.length && <div className="dominio-issues" role="status">
+                    <strong>Empresas que precisam de revisão</strong>
+                    {dominioResult.issues.map((issue) => <p key={issue.cnpj}>{formatCnpj(issue.cnpj)}: {issue.message}</p>)}
+                    <small>Os XMLs dessas empresas permanecem na pasta por CNPJ até o cadastro ser resolvido.</small>
+                  </div>}
+                  <div className="path-preview"><span>Pastas para as rotinas do Domínio</span>
+                    <code>Emitidas\Código-Apelido\MMAAAA</code>
+                    <code>Recebidas\Código-Apelido\MMAAAA</code>
+                  </div>
+                </section>
+              )}
               <div className="settings-update">
                 <div className="settings-update-copy">
                   <strong>Atualizações do Gestor</strong>
@@ -1251,7 +1330,7 @@ export function App() {
                 <SquareArrowOutUpRight size={15} />
               </a>
             </div>
-            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)}>Cancelar</button><button className="button primary">Salvar configurações</button></div>
+            <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setDialog(null)} disabled={dominioBusy}>Cancelar</button><button className="button primary" disabled={dominioBusy}>Salvar configurações</button></div>
           </form>
         </div>
       )}
@@ -1283,31 +1362,35 @@ export function App() {
                     type="text"
                     inputMode="numeric"
                     value={companySettings.dominio_code}
+                    readOnly={settings.dominio_folder_layout_enabled}
                     onChange={(event) => setCompanySettings((current) => ({
                       ...current,
                       dominio_code: event.target.value
                     }))}
                     placeholder="XX enquanto não configurado"
                   />
-                  <small>Deixe vazio para usar XX provisoriamente.</small>
+                  <small>{settings.dominio_folder_layout_enabled ? "Obtido do banco pelo CNPJ." : "Deixe vazio para usar XX provisoriamente."}</small>
                 </label>
                 <label>
                   Apelido da empresa no Domínio
                   <input
                     type="text"
                     value={companySettings.dominio_alias}
+                    readOnly={settings.dominio_folder_layout_enabled}
                     onChange={(event) => setCompanySettings((current) => ({
                       ...current,
                       dominio_alias: event.target.value
                     }))}
                     placeholder={`EMPRESA-${selected.cnpj}`}
                   />
-                  <small>Deixe vazio para gerar um nome único com o CNPJ.</small>
+                  <small>{settings.dominio_folder_layout_enabled ? "Apelido oficial do cadastro Domínio." : "Deixe vazio para gerar um nome único com o CNPJ."}</small>
                 </label>
               </div>
               <div className="path-preview">
                 <span>Prévia da pasta</span>
-                <code>{`${settings.notes_directory || "Pasta das notas"}\\${companySettings.dominio_code.trim() || "XX"}-${companySettings.dominio_alias.trim() || `EMPRESA-${selected.cnpj}`}\\MMAAAA`}</code>
+                <code>{companySettings.dominio_code && companySettings.dominio_alias
+                  ? `${settings.notes_directory || "Pasta das notas"}\\Emitidas (ou Recebidas)\\${companySettings.dominio_code}-${companySettings.dominio_alias}\\MMAAAA`
+                  : `Sem vínculo com o Domínio. XMLs em ${selected.cnpj}\\xml.`}</code>
               </div>
               <div className="reorganize-panel">
                 <div>

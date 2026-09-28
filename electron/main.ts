@@ -17,6 +17,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import crypto from "node:crypto";
+import { DominioConfig, DominioResult } from "./dominio-config.js";
 
 import {
   AppliedDownloadQuery,
@@ -275,6 +276,39 @@ async function api<T>(route: string, init?: RequestInit): Promise<T> {
 
 function credentialPath(cnpj: string): string {
   return path.join(app.getPath("userData"), "credentials", `${cnpj}.bin`);
+}
+
+async function readDominioConfig(): Promise<DominioConfig | null> {
+  const target = credentialPath("dominio-connection");
+  if (!existsSync(target)) return null;
+  try {
+    return JSON.parse(safeStorage.decryptString(await readFile(target))) as DominioConfig;
+  } catch {
+    throw new Error("Não foi possível abrir as credenciais do Domínio. Configure a conexão novamente.");
+  }
+}
+
+async function connectDominio(config: DominioConfig): Promise<DominioResult> {
+  return api<DominioResult>("/dominio/connect", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config), signal: AbortSignal.timeout(25000)
+  });
+}
+
+let dominioRefresh: Promise<void> | undefined;
+let lastDominioRefresh = 0;
+async function refreshDominio(force = false): Promise<void> {
+  const settings = await api<AppSettings>("/settings");
+  if (!settings.dominio_folder_layout_enabled) return;
+  if (!force && Date.now() - lastDominioRefresh < 5 * 60 * 1000) return;
+  if (dominioRefresh) return dominioRefresh;
+  dominioRefresh = (async () => {
+    const config = await readDominioConfig();
+    if (!config) throw new Error("Configure a conexão com o banco nas configurações do Domínio.");
+    await connectDominio(config);
+    lastDominioRefresh = Date.now();
+  })();
+  try { await dominioRefresh; } finally { dominioRefresh = undefined; }
 }
 
 const wait = (milliseconds: number) =>
@@ -787,6 +821,26 @@ function registerIpc(): void {
   ipcMain.handle("exports:status", () => exportQueue.snapshot());
   ipcMain.handle("sync:status", () => syncQueue.snapshot());
   ipcMain.handle("settings:get", () => api("/settings"));
+  ipcMain.handle("dominio:config", async () => {
+    const config = await readDominioConfig();
+    return config ? { ...config, pwd: "", passwordSaved: true } : null;
+  });
+  ipcMain.handle("dominio:connect", async (_event, input: DominioConfig) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error("A proteção de credenciais do Windows não está disponível.");
+    }
+    const saved = await readDominioConfig().catch(() => null);
+    const config: DominioConfig = {
+      driver: input.driver, server: input.server, database: input.database,
+      uid: input.uid, host: input.host, pwd: input.pwd || saved?.pwd || ""
+    };
+    const result = await connectDominio(config);
+    const target = credentialPath("dominio-connection");
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, safeStorage.encryptString(JSON.stringify(config)));
+    lastDominioRefresh = Date.now();
+    return result;
+  });
   ipcMain.handle("settings:update", (_event, settings) =>
     api("/settings", {
       method: "PUT",
@@ -817,6 +871,7 @@ function registerIpc(): void {
     body: JSON.stringify(input.settings)
   }));
   ipcMain.handle("companies:reorganize-dominio", async (_event, cnpj: string) => {
+    await refreshDominio(true);
     let status = await api<ReorganizationStatus>(
       `/companies/${cnpj}/dominio/reorganize`,
       { method: "POST" }
@@ -989,6 +1044,7 @@ function registerIpc(): void {
     return api(`/companies/${cnpj}`, { method: "DELETE" });
   });
   ipcMain.handle("companies:sync", async (_event, input: SyncRequest) => {
+    await refreshDominio(true);
     const companies = await api<CompanyRecord[]>("/companies");
     const company = companies.find((item) => item.cnpj === input.cnpj);
     if (!company) throw new Error("Empresa nao encontrada.");

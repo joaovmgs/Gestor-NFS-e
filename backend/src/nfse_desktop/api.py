@@ -18,6 +18,7 @@ from .certificates import (
 )
 from .config import Settings
 from .database import Database
+from .dominio import read_company_mappings
 from .exporter import DocumentExporter
 from .repository import Repository
 from .storage import ReorganizationManager, validate_dominio_configuration
@@ -167,6 +168,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/settings", dependencies=[Depends(authorize)])
     def get_settings():
         return repository.get_settings()
+
+    @app.post("/dominio/connect", dependencies=[Depends(authorize)])
+    def connect_dominio(config: dict[str, str]):
+        try:
+            companies = repository.list_companies()
+            result = read_company_mappings(config, [item["cnpj"] for item in companies])
+            with repository.database.connect() as connection:
+                for item in result["matched"]:
+                    connection.execute(
+                        "UPDATE companies SET dominio_code=?, dominio_alias=? WHERE cnpj=?",
+                        (item["dominio_code"], item["dominio_alias"], item["cnpj"]),
+                    )
+                for item in result["issues"]:
+                    connection.execute(
+                        "UPDATE companies SET dominio_code=NULL, dominio_alias=NULL WHERE cnpj=?",
+                        (item["cnpj"],),
+                    )
+            return {"matched": len(result["matched"]), "issues": result["issues"]}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
 
     @app.put("/settings", dependencies=[Depends(authorize)])
     def update_settings(payload: SettingsPayload):

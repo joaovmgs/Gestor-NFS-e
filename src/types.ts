@@ -57,6 +57,20 @@ export interface AppSettings {
   dominio_folder_layout_enabled: boolean;
 }
 
+export interface DominioConfig {
+  driver: string;
+  server: string;
+  database: string;
+  uid: string;
+  pwd: string;
+  host: string;
+}
+
+export interface DominioResult {
+  matched: number;
+  issues: Array<{ cnpj: string; message: string }>;
+}
+
 export interface CompanySettingsInput {
   dominio_code: string;
   dominio_alias: string;
@@ -180,6 +194,8 @@ export interface NfseApi {
   listSyncLogs(cnpj: string): Promise<SyncLog[]>;
   syncCompany(cnpj: string, password?: string, notify?: boolean): Promise<SyncQueueResult>;
   getSettings(): Promise<AppSettings>;
+  getDominioConfig(): Promise<(DominioConfig & { passwordSaved: boolean }) | null>;
+  connectDominio(config: DominioConfig): Promise<DominioResult>;
   updateSettings(settings: AppSettings): Promise<AppSettings>;
   selectNotesDirectory(): Promise<string | null>;
   checkForUpdates(force?: boolean): Promise<UpdateStatus>;

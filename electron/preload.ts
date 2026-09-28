@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { DominioConfig } from "./dominio-config.js";
 
 async function invokeClean<T>(channel: string, ...args: unknown[]): Promise<T> {
   try {
@@ -64,6 +65,8 @@ contextBridge.exposeInMainWorld("nfse", {
   syncCompany: (cnpj: string, password?: string, notify = true) =>
     invokeClean("companies:sync", { cnpj, password, notify }),
   getSettings: () => invokeClean("settings:get"),
+  getDominioConfig: () => invokeClean("dominio:config"),
+  connectDominio: (config: DominioConfig) => invokeClean("dominio:connect", config),
   updateSettings: (settings: AppSettings) => invokeClean("settings:update", settings),
   selectNotesDirectory: () => invokeClean("settings:select-directory"),
   checkForUpdates: (force = false) => invokeClean("updates:check", force),
