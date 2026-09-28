@@ -98,7 +98,7 @@ class Repository:
         with self.database.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, nsu, access_key, issued_at, xml_path
+                SELECT id, nsu, access_key, issued_at, xml_path, direction
                 FROM documents
                 WHERE company_cnpj = ? AND document_type = 'NFSE'
                 ORDER BY id

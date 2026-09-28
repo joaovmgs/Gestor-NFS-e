@@ -31,7 +31,7 @@ def make_repository(tmp_path: Path) -> Repository:
     return repository
 
 
-def test_dominio_path_uses_unique_placeholders_and_issue_month(tmp_path: Path) -> None:
+def test_dominio_path_without_mapping_keeps_cnpj_layout(tmp_path: Path) -> None:
     path = document_xml_path(
         str(tmp_path),
         cnpj=CNPJ,
@@ -44,7 +44,7 @@ def test_dominio_path_uses_unique_placeholders_and_issue_month(tmp_path: Path) -
         dominio_alias=None,
     )
 
-    assert path == tmp_path / f"XX-EMPRESA-{CNPJ}" / "012026" / "000000000042-CHAVE.xml"
+    assert path == tmp_path / CNPJ / "xml" / "000000000042-CHAVE.xml"
 
 
 def test_dominio_path_combines_partial_configuration(tmp_path: Path) -> None:
@@ -71,8 +71,8 @@ def test_dominio_path_combines_partial_configuration(tmp_path: Path) -> None:
         dominio_alias="CAPITAL TRADE",
     )
 
-    assert code_only.parent.parent.name == f"40-EMPRESA-{CNPJ}"
-    assert alias_only.parent.parent.name == "XX-CAPITAL TRADE"
+    assert code_only.parent.parent.name == CNPJ
+    assert alias_only.parent.parent.name == CNPJ
 
 
 def test_invalid_issue_date_uses_sync_month_without_failing(tmp_path: Path) -> None:
@@ -84,8 +84,9 @@ def test_invalid_issue_date_uses_sync_month_without_failing(tmp_path: Path) -> N
         document_type="NFSE",
         issued_at="data-invalida",
         dominio_enabled=True,
-        dominio_code=None,
-        dominio_alias=None,
+        dominio_code="40",
+        dominio_alias="EMPRESA",
+        direction="emitida",
         fallback_at=datetime(2026, 8, 28, tzinfo=UTC),
     )
 
@@ -113,7 +114,8 @@ def test_configured_alias_rejects_windows_invalid_characters() -> None:
         validate_dominio_configuration("40", "EMPRESA/TESTE", cnpj=CNPJ)
 
 
-def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path) -> None:
+@pytest.mark.parametrize("direction,folder", [("emitida", "Emitidas"), ("recebida", "Recebidas")])
+def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path, direction, folder) -> None:
     repository = make_repository(tmp_path)
     repository.update_settings(
         str(tmp_path / "Notas"),
@@ -134,7 +136,7 @@ def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path) -> Non
             "nsu": 1,
             "access_key": "CHAVE",
             "document_type": "NFSE",
-            "direction": "emitida",
+            "direction": direction,
             "issued_at": "2026-01-20T10:00:00-03:00",
             "xml_path": str(old_path),
         }
@@ -142,7 +144,7 @@ def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path) -> Non
 
     result = reorganize_company_xmls(repository, CNPJ)
 
-    expected = tmp_path / "Notas" / "40-CAPITAL TRADE" / "012026" / old_path.name
+    expected = tmp_path / "Notas" / folder / "40-CAPITAL TRADE" / "012026" / old_path.name
     assert result == {
         "state": "completed",
         "total": 1,
@@ -160,6 +162,7 @@ def test_reorganize_moves_known_nfse_and_updates_database(tmp_path: Path) -> Non
 
 def test_reorganize_does_not_overwrite_different_file(tmp_path: Path) -> None:
     repository = make_repository(tmp_path)
+    repository.update_company_settings(CNPJ, dominio_code="40", dominio_alias="EMPRESA")
     repository.update_settings(
         str(tmp_path / "Notas"),
         notifications_enabled=True,
@@ -181,7 +184,8 @@ def test_reorganize_does_not_overwrite_different_file(tmp_path: Path) -> None:
     destination = (
         tmp_path
         / "Notas"
-        / f"XX-EMPRESA-{CNPJ}"
+        / "Emitidas"
+        / "40-EMPRESA"
         / "012026"
         / "000000000001-CHAVE.xml"
     )
@@ -209,6 +213,7 @@ def test_large_reorganization_updates_database_in_batches(tmp_path: Path) -> Non
                         "id": index + 1,
                         "nsu": index + 1,
                         "access_key": f"CHAVE-{index}",
+                        "direction": "recebida",
                         "issued_at": "2026-01-20",
                         "xml_path": str(source),
                     }
@@ -241,3 +246,37 @@ def test_large_reorganization_updates_database_in_batches(tmp_path: Path) -> Non
         REORGANIZATION_BATCH_SIZE,
         1,
     ]
+
+
+def test_reorganization_recovers_interrupted_layout_and_preserves_source_on_db_failure(
+    tmp_path, monkeypatch,
+):
+    repository = make_repository(tmp_path)
+    notes = tmp_path / "Notas"
+    repository.update_settings(str(notes), True, True)
+    repository.update_company_settings(CNPJ, dominio_code="40", dominio_alias="EMPRESA")
+    missing_path = notes / "40-EMPRESA" / "012026" / "000000000001-CHAVE.xml"
+    actual = missing_path.parent / "Recebidas" / missing_path.name
+    actual.parent.mkdir(parents=True)
+    actual.write_text("<NFSe />", encoding="utf-8")
+    repository.save_document({
+        "company_cnpj": CNPJ, "nsu": 1, "access_key": "CHAVE", "document_type": "NFSE",
+        "direction": "recebida", "issued_at": "2026-01-20", "xml_path": str(missing_path),
+    })
+    original_update = repository.update_document_xml_paths
+
+    def fail(_updates):
+        raise RuntimeError("Simulated database write failure")
+
+    monkeypatch.setattr(repository, "update_document_xml_paths", fail)
+    result = reorganize_company_xmls(repository, CNPJ)
+    assert result["errors"] == 1
+    assert actual.read_text(encoding="utf-8") == "<NFSe />"
+    destination = notes / "Recebidas" / "40-EMPRESA" / "012026" / missing_path.name
+    assert not destination.exists()
+    monkeypatch.setattr(repository, "update_document_xml_paths", original_update)
+    result = reorganize_company_xmls(repository, CNPJ)
+    assert result["errors"] == 0
+    assert destination.read_text(encoding="utf-8") == "<NFSe />"
+    assert not actual.exists()
+    assert repository.list_company_nfse_documents(CNPJ)[0]["xml_path"] == str(destination)

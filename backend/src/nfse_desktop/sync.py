@@ -269,6 +269,7 @@ class SyncService:
             dominio_enabled=settings["dominio_folder_layout_enabled"],
             dominio_code=company.get("dominio_code"),
             dominio_alias=company.get("dominio_alias"),
+            direction=direction,
         )
         xml_path.parent.mkdir(parents=True, exist_ok=True)
         xml_path.write_text(xml, encoding="utf-8")

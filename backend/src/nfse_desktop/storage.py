@@ -65,20 +65,31 @@ def document_xml_path(
     dominio_enabled: bool,
     dominio_code: str | None,
     dominio_alias: str | None,
+    direction: str | None = None,
     fallback_at: datetime | None = None,
 ) -> Path:
     root = Path(notes_directory)
     filename = f"{nsu:012d}-{access_key}.xml"
     if dominio_enabled and document_type == "NFSE":
+        if not dominio_code or not dominio_alias or direction not in {"emitida", "recebida"}:
+            return root / cnpj / "xml" / filename
         code, alias = validate_dominio_configuration(
             dominio_code,
             dominio_alias,
             cnpj=cnpj,
         )
-        return root / f"{code}-{alias}" / dominio_competence(
+        direction_folder = {"emitida": "Emitidas", "recebida": "Recebidas"}.get(
+            direction or ""
+        )
+        path = root
+        if direction_folder:
+            path /= direction_folder
+        path /= f"{code}-{alias}"
+        path /= dominio_competence(
             issued_at,
             fallback_at=fallback_at,
-        ) / filename
+        )
+        return path / filename
     return root / cnpj / "xml" / filename
 
 
@@ -97,6 +108,8 @@ def reorganize_company_xmls(
     company = repository.get_company(cnpj)
     if not company:
         raise ValueError("Empresa não encontrada.")
+    if not company.get("dominio_code") or not company.get("dominio_alias"):
+        raise ValueError("Atualize a conexão Domínio e resolva o vínculo desta empresa pelo CNPJ.")
 
     documents = repository.list_company_nfse_documents(cnpj)
     result: dict[str, Any] = {
@@ -129,17 +142,22 @@ def reorganize_company_xmls(
         except Exception as exc:
             for _, source, destination, action in reversed(pending):
                 try:
-                    if action == "moved" and destination.exists():
-                        source.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.move(str(destination), str(source))
-                    elif action == "deduplicated" and destination.exists():
-                        source.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(destination, source)
+                    if action == "copied" and source.exists() and destination.exists():
+                        destination.unlink()
                 except OSError as rollback_error:
                     add_error(rollback_error)
             add_error(exc, len(pending))
         else:
             result["moved"] += len(pending)
+            # Commit paths before removing originals. An interrupted batch can be
+            # retried without losing files or leaving the database pointing nowhere.
+            for _, source, destination, action in pending:
+                if action in {"copied", "deduplicated"}:
+                    try:
+                        if filecmp.cmp(source, destination, shallow=False):
+                            source.unlink()
+                    except OSError as exc:
+                        add_error(exc)
         pending.clear()
         publish()
 
@@ -156,8 +174,20 @@ def reorganize_company_xmls(
             dominio_enabled=True,
             dominio_code=company.get("dominio_code"),
             dominio_alias=company.get("dominio_alias"),
+            direction=document.get("direction"),
         )
         try:
+            if document.get("direction") not in {"emitida", "recebida"}:
+                raise ValueError(f"XML sem direção reconhecida: {source.name}")
+            if not source.is_file() and not destination.is_file():
+                # Recover paths left by the earlier experimental month/type layout.
+                root = Path(settings["notes_directory"]).resolve()
+                if source.resolve().is_relative_to(root):
+                    candidates = [source.parent / kind / source.name
+                                  for kind in ("Emitidas", "Recebidas")]
+                    found = [item for item in candidates if item.is_file()]
+                    if len(found) == 1:
+                        source = found[0]
             if source.resolve() == destination.resolve():
                 result["skipped"] += 1
             elif not source.is_file():
@@ -172,11 +202,10 @@ def reorganize_company_xmls(
                         raise FileExistsError(
                             f"Já existe um arquivo diferente em: {destination}"
                         )
-                    source.unlink()
                     action = "deduplicated"
                 else:
-                    shutil.move(str(source), str(destination))
-                    action = "moved"
+                    shutil.copy2(source, destination)
+                    action = "copied"
                 pending.append((int(document["id"]), source, destination, action))
         except Exception as exc:  # Cada arquivo deve falhar sem interromper os demais.
             add_error(exc)
