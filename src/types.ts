@@ -71,6 +71,13 @@ export interface DominioResult {
   issues: Array<{ cnpj: string; message: string }>;
 }
 
+export interface DominioStatus {
+  state: "disabled" | "checking" | "connected" | "offline";
+  lastSuccess?: string;
+  message: string;
+  result?: DominioResult;
+}
+
 export interface CompanySettingsInput {
   dominio_code: string;
   dominio_alias: string;
@@ -195,6 +202,7 @@ export interface NfseApi {
   syncCompany(cnpj: string, password?: string, notify?: boolean): Promise<SyncQueueResult>;
   getSettings(): Promise<AppSettings>;
   getDominioConfig(): Promise<(DominioConfig & { passwordSaved: boolean }) | null>;
+  getDominioStatus(): Promise<DominioStatus>;
   connectDominio(config: DominioConfig): Promise<DominioResult>;
   updateSettings(settings: AppSettings): Promise<AppSettings>;
   selectNotesDirectory(): Promise<string | null>;

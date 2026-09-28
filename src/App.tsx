@@ -26,6 +26,7 @@ import type {
   Document,
   DominioConfig,
   DominioResult,
+  DominioStatus,
   DownloadOptions,
   ExportQueueStatus,
   PfxSelection,
@@ -146,6 +147,7 @@ export function App() {
   const [dominioBusy, setDominioBusy] = useState(false);
   const [dominioMessage, setDominioMessage] = useState("");
   const [dominioResult, setDominioResult] = useState<DominioResult | null>(null);
+  const [dominioStatus, setDominioStatus] = useState<DominioStatus | null>(null);
   const [companySettings, setCompanySettings] = useState({
     dominio_code: "",
     dominio_alias: ""
@@ -291,6 +293,33 @@ export function App() {
   }, []);
 
   useEffect(() => window.nfse.onUpdateDownloadProgress(setUpdateProgress), []);
+
+  useEffect(() => {
+    let disposed = false;
+    let lastSuccess: string | undefined;
+    const refresh = async () => {
+      try {
+        const status = await window.nfse.getDominioStatus();
+        if (disposed) return;
+        setDominioStatus(status);
+        if (status.result) setDominioResult(status.result);
+        if (status.lastSuccess && status.lastSuccess !== lastSuccess) {
+          lastSuccess = status.lastSuccess;
+          const updated = await window.nfse.listCompanies();
+          if (!disposed) setCompanies(updated);
+        }
+      } catch { /* The local service may still be starting. */ }
+    };
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 3000);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, []);
+
+  useEffect(() => {
+    if (dialog === "company-settings" && settings.dominio_folder_layout_enabled && selected) {
+      setCompanySettings({ dominio_code: selected.dominio_code ?? "", dominio_alias: selected.dominio_alias ?? "" });
+    }
+  }, [dialog, settings.dominio_folder_layout_enabled, selected?.dominio_code, selected?.dominio_alias]);
 
   useEffect(
     () => window.nfse.onDominioReorganizationProgress(setReorganizationProgress),
@@ -755,6 +784,9 @@ export function App() {
           )}
         </nav>
         <div className="sidebar-footer">
+          {dominioStatus && dominioStatus.state !== "disabled" && (
+            <small className={`dominio-status ${dominioStatus.state}`} role="status">{dominioStatus.message}</small>
+          )}
           <button className="settings-button" onClick={openSettings}><Settings size={16} /> Configurações</button>
           <a className="repository-link" href={repositoryUrl} target="_blank" rel="noreferrer">
             <Github size={15} />
@@ -1267,6 +1299,11 @@ export function App() {
                     ))}
                   </div>
                   <small>O acesso é usado somente para leitura. As credenciais ficam protegidas neste usuário do Windows.</small>
+                  <small>Após configurar, a consulta fica ativa em segundo plano, inclusive na bandeja. Empresas sem vínculo são verificadas a cada minuto, com reconexão automática quando a rede voltar.</small>
+                  {dominioStatus && <div className={`dominio-status ${dominioStatus.state}`} role="status">
+                    {dominioStatus.message}
+                    {dominioStatus.lastSuccess && <small> Última consulta: {new Date(dominioStatus.lastSuccess).toLocaleString("pt-BR")}</small>}
+                  </div>}
                   <button type="button" className="button secondary" disabled={dominioBusy} onClick={testDominioConnection}>
                     <RefreshCw size={15} className={dominioBusy ? "spinning" : ""} />
                     {dominioBusy ? "Conectando..." : "Conectar e salvar acesso"}

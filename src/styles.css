@@ -197,6 +197,9 @@ td.money { font-weight: 700; text-align: right; }
 .dominio-network-alert svg { flex-shrink: 0; }
 .dominio-issues { max-height: 150px; overflow-y: auto; color: #805714; font-size: 12px; }
 .dominio-issues p { margin: 8px 0; }
+.dominio-status { display: block; padding: 9px; border-radius: 6px; font-size: 11px; line-height: 1.5; color: #365a49; background: #eef6f1; }
+.dominio-status.offline { color: #805714; background: #fff5df; }
+.dominio-status small { display: block; }
 .dialog-header { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 .dialog-header h2 { margin: 0; font-size: 18px; }
 .dialog-header p { margin: 5px 0 0; color: #6f7c77; font-size: 12px; }

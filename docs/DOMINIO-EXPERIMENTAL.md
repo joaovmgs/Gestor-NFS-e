@@ -14,7 +14,14 @@ Deixe a senha vazia ao editar para manter a existente.
 Cada empresa é associada pelo CNPJ completo, incluindo a filial. Cadastros
 ausentes, ambíguos ou com apelidos incompatíveis com nomes de pasta são exibidos
 para revisão. Seus XMLs seguem na pasta por CNPJ até o vínculo ser resolvido.
-O vínculo é consultado novamente antes de sincronizar ou reorganizar XMLs.
+Com o modo ativo, os vínculos são consultados automaticamente ao abrir o app,
+ao cadastrar empresas e a cada minuto, inclusive enquanto o Gestor está na
+bandeja. Empresas sem vínculo continuam sendo consultadas. Uma queda de rede
+gera um aviso e novas tentativas automáticas; os vínculos já salvos permanecem
+em uso e a consulta de notas continua. A conexão de banco é aberta para cada
+consulta e fechada em seguida, mantendo a integração ativa sem depender de uma
+sessão SQL permanente. Fechar o Gestor por completo interrompe as consultas;
+abrir novamente retoma usando as credenciais protegidas.
 Salvar a conexão não move os arquivos já baixados; use a opção da empresa.
 
 Novos XMLs vinculados são gravados em:

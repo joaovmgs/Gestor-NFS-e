@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("nfse", {
     invokeClean("companies:sync", { cnpj, password, notify }),
   getSettings: () => invokeClean("settings:get"),
   getDominioConfig: () => invokeClean("dominio:config"),
+  getDominioStatus: () => invokeClean("dominio:status"),
   connectDominio: (config: DominioConfig) => invokeClean("dominio:connect", config),
   updateSettings: (settings: AppSettings) => invokeClean("settings:update", settings),
   selectNotesDirectory: () => invokeClean("settings:select-directory"),
