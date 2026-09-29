@@ -578,8 +578,6 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
 
   let requestedNsu = Math.max(0, Number(company.last_nsu || 0) - 50);
   let downloaded = 0;
-  let networkAttempt = 0;
-  const retryDelays = [15, 30, 60, 120, 300];
   while (true) {
     if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     let stdout: string;
@@ -608,18 +606,9 @@ async function synchronizeWindowsCompany(company: CompanyRecord): Promise<number
         throw new Error(errorMessage);
       }
 
-      const delaySeconds = retryDelays[Math.min(networkAttempt, retryDelays.length - 1)];
-      networkAttempt += 1;
-      await addSyncLog(
-        company.cnpj,
-        "warning",
-        `Falha de rede: ${errorMessage}. Nova tentativa em ${delaySeconds}s.`
-      );
-      await wait(delaySeconds * 1000);
-      continue;
+      throw new Error(`Falha de rede: ${errorMessage}`);
     }
 
-    networkAttempt = 0;
     if (removedCompanyCnpjs.has(company.cnpj)) return downloaded;
     let response: Record<string, unknown>;
     try {
@@ -757,7 +746,7 @@ function scheduleSyncRetry(request: SyncRequest, reason: string): void {
   void addSyncLog(
     request.cnpj,
     "warning",
-    `Consulta pausada: ${reason}. Retomada automatica em ${delaySeconds}s.`
+    `Consulta pausada: ${reason}. As outras empresas seguem na fila; esta empresa tentará novamente em ${delaySeconds}s.`
   ).catch(() => undefined);
   const timer = setTimeout(() => {
     syncRetryTimers.delete(request.cnpj);
