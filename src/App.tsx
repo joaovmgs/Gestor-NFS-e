@@ -142,6 +142,7 @@ export function App() {
     notifications_enabled: true,
     dominio_folder_layout_enabled: false
   });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [dominioConfig, setDominioConfig] = useState<DominioConfig>(emptyDominioConfig);
   const [dominioPasswordSaved, setDominioPasswordSaved] = useState(false);
   const [dominioBusy, setDominioBusy] = useState(false);
@@ -279,7 +280,10 @@ export function App() {
       setMessage(error.message);
       setLoading(false);
     });
-    window.nfse.getSettings().then(setSettings).catch(() => undefined);
+    window.nfse.getSettings().then((value) => {
+      setSettings(value);
+      setSettingsLoaded(true);
+    }).catch(() => setSettingsLoaded(true));
     window.nfse.checkForUpdates().then(setUpdateStatus).catch(() => undefined);
     return window.nfse.onUpdateStatus((status) => {
       setUpdateStatus(status);
@@ -422,19 +426,19 @@ export function App() {
 
   async function openSettings() {
     setMessage("");
+    setDominioMessage("");
+    setDominioResult(null);
+    setDominioConfig((current) => ({ ...current, pwd: "" }));
+    setDialog("settings");
     try {
-      setSettings(await window.nfse.getSettings());
       const config = await window.nfse.getDominioConfig().catch(() => null);
       setDominioConfig(config ? {
         driver: config.driver, server: config.server, database: config.database,
         uid: config.uid, pwd: "", host: config.host
       } : emptyDominioConfig);
       setDominioPasswordSaved(config?.passwordSaved ?? false);
-      setDominioMessage("");
-      setDominioResult(null);
-      setDialog("settings");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Falha ao carregar configurações.");
+      setDominioMessage(error instanceof Error ? error.message : "Falha ao carregar configuração do Domínio.");
     }
   }
 
@@ -485,6 +489,10 @@ export function App() {
 
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
+    if (!settingsLoaded) {
+      setDominioMessage("As configurações ainda estão carregando. Aguarde um instante e tente novamente.");
+      return;
+    }
     setDominioBusy(true);
     try {
       if (settings.dominio_folder_layout_enabled) await saveDominioConnection();
@@ -516,9 +524,8 @@ export function App() {
     finally { setDominioBusy(false); }
   }
 
-  async function openCompanySettings() {
+  function openCompanySettings() {
     if (!selected) return;
-    setSettings(await window.nfse.getSettings());
     setCompanySettings({
       dominio_code: selected.dominio_code ?? "",
       dominio_alias: selected.dominio_alias ?? ""
